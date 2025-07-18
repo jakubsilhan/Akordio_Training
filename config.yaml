@@ -1,0 +1,18 @@
+base:
+  random_seed: 42
+data:
+  dataset_dir: "D:/Development/Source/University/Diploma/chord-recognition/Datasets"
+  datasets: [Beatles, Uspop2000]
+  preprocessed_dir: "D:/Development/Source/University/Diploma/chord-recognition/Data/BaseDataset"
+  preprocess:
+    pcp: False
+    num_splits: 5
+    bins_per_octave: 24
+    cqt_bins: 144
+    hop_length: 2048
+    fragment_size: 108
+    pitch_shift_start: -6
+    pitch_shift_end: 6
+    sampling_rate: 22050
+model:
+  bidirectional: True
