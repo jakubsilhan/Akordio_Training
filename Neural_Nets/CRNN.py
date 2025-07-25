@@ -1,20 +1,5 @@
 import torch
 import torch.nn as nn
-from CRF import CRF
-
-class Crf(nn.Module):
-    def __init__(self, num_chords, timestep):
-        super(Crf, self).__init__()
-        self.output_size = num_chords
-        self.timestep = timestep
-        self.Crf = CRF(self.output_size)
-
-    def forward(self, probs, labels):
-        prediction = self.Crf(probs)
-        prediction = prediction.view(-1)
-        labels = labels.view(-1, self.timestep)
-        loss = self.Crf.loss(probs, labels)
-        return prediction, loss
 
 class CRNN(nn.Module):
     def __init__(self, feature_size, output_features, hidden_size, num_layers, bidirectional, device, dropout=(0.4,0,0)): # 12 + 1 and 6 + 1 for N chord

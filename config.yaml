@@ -3,6 +3,7 @@ base:
 data:
   dataset_dir: "D:/Development/Source/University/Diploma/chord-recognition/Datasets"
   datasets: [Beatles, Uspop2000]
+  # datasets: [Beatles]
   preprocessed_dir: "D:/Development/Source/University/Diploma/chord-recognition/Data/BaseDataset"
   preprocess:
     pcp: False
@@ -14,5 +15,25 @@ data:
     pitch_shift_start: -6
     pitch_shift_end: 6
     sampling_rate: 22050
-model:
-  bidirectional: True
+train:
+  data_source: "D:/Development/Source/University/Diploma/chord-recognition/Data/BaseDataset"
+  model_path: "D:/Development/Source/University/Diploma/chord-recognition/Models"
+  model_name: "crnn_144_majmin"
+  test_fold: 5
+  model_type: "crnn"
+  model_complexity: "majmin"
+  checkpoint_interval: 50
+  model:
+    batch_size: 128
+    input: 144
+    output: 25
+    hidden: 128
+    layers: 2
+    bidirectional: True
+    padding_index: -1
+    epoch_count: 200
+    learning_rate: 0.0001
+    weight_decay: 1e-5
+    scheduler_step: 100
+    scheduler_gamma: 0.1
+    normalization: True

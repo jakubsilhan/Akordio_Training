@@ -3,7 +3,7 @@ import pandas as pd
 from tqdm import tqdm
 import os, librosa, shutil
 from sklearn.model_selection import KFold
-from config import Config, load_config
+from Core.config import Config, load_config
 
 class Preprocess():
     def __init__(self, config: Config):
@@ -125,6 +125,8 @@ class Preprocess():
 
         if ':' in chord:
             root, type_name = chord.split(':', maxsplit=1)
+            if type_name == '':
+                type_name = 'maj'
         else:
             root = chord
             type_name = 'maj'
@@ -138,16 +140,27 @@ class Preprocess():
     # Utils
     def save_fragments(self, song_df: pd.DataFrame, base_name: str, fold: int, shift_factor: int) -> None:
         '''
-        Splits the song dataframe into fixed-size fragments (in frames) and saves them as individual CSVs
+        Splits the song dataframe into fixed-size fragments (in frames) and saves them as individual npz files
         '''
         num_rows = len(song_df)
         num_fragments = num_rows // self.config.data.preprocess.fragment_size
+        input_dim = config.train.model.input
 
         for i in range(num_fragments):
             fragment = song_df.iloc[i * self.config.data.preprocess.fragment_size : (i + 1) * self.config.data.preprocess.fragment_size]
-            frag_filename = f"{base_name}_shift{shift_factor:02d}_frag{i:03d}.csv"
+
+            # Extract into numpy arrays
+            timestamps = fragment.iloc[:, 0].values.astype(np.float32)
+            X = fragment.iloc[:, 1:1 + input_dim].values.astype(np.float32)
+            y = fragment["chord"].values.astype(str)
+
+            # Prepare pathing
+            frag_filename = f"{base_name}_shift{shift_factor:02d}_frag{i:03d}.npz"
             frag_path = os.path.join(self.config.data.preprocessed_dir, str(fold),frag_filename)
-            fragment.to_csv(frag_path, index=False)
+            os.makedirs(os.path.dirname(frag_path), exist_ok=True)
+
+            # Save into npz
+            np.savez_compressed(frag_path, timestamps=timestamps, X=X, y=y)
 
 
 

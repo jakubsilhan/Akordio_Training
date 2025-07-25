@@ -18,9 +18,30 @@ class DataConfig(BaseModel):
     preprocessed_dir: str
     preprocess: PreprocessingConfig
 
-
 class ModelConfig(BaseModel):
+    batch_size: int
+    input: int
+    output: int
+    hidden: int
+    layers: int
     bidirectional: bool
+    padding_index: int
+    epoch_count: int
+    learning_rate: float
+    weight_decay: float
+    scheduler_step: int
+    scheduler_gamma: float
+    normalization: bool
+
+class TrainConfig(BaseModel):
+    data_source: str
+    model_path: str
+    model_name: str
+    test_fold: int
+    model_type: str
+    model_complexity: str
+    checkpoint_interval: int
+    model: ModelConfig
 
 class BaseConfig(BaseModel):
     random_seed: int
@@ -28,7 +49,7 @@ class BaseConfig(BaseModel):
 class Config(BaseModel):
     base: BaseConfig
     data: DataConfig
-    model: ModelConfig
+    train: TrainConfig
 
 def load_config(path="config.yaml") -> Config:
     with open(path, 'r') as f:
