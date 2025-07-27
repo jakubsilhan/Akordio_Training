@@ -1,4 +1,4 @@
-import os, torch
+import os, torch, shutil
 import pandas as pd
 import numpy as np
 import torch.nn as nn
@@ -41,8 +41,9 @@ def compute_mean_std(dataloader):
 
 def train(config: Config):
     # Initialization
-    model_folder = os.path.join(config.train.model_path, config.train.model_name)
+    model_folder = os.path.join(config.train.model_path, config.train.model_name, str(config.train.test_fold))
     os.makedirs(model_folder, exist_ok=True)
+    shutil.copy2("config.yaml", model_folder)
 
     match config.train.model_complexity:
         case "complex":
@@ -58,9 +59,6 @@ def train(config: Config):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Load data
-    # df_list_train = []
-    # df_list_test = []
-
     train_tensors = []
     test_tensors = []
 
@@ -104,58 +102,6 @@ def train(config: Config):
         X_tensor = torch.tensor(X, dtype=torch.float32)
         y_tensor = torch.tensor(y, dtype=torch.long)
         test_tensors.append((X_tensor, y_tensor))
-
-    # ## Load Train
-    # for fold in tqdm(os.listdir(config.data.preprocessed_dir), desc="Loading train folds"):
-    #     if fold == str(config.train.test_fold-1):
-    #         continue
-        
-    #     fold_dir = os.path.join(config.data.preprocessed_dir, fold)
-    #     for fragment in os.listdir(fold_dir):
-    #         fragment_path = os.path.join(fold_dir, fragment)
-    #         fragment_df = pd.read_csv(fragment_path)
-    #         df_list_train.append(fragment_df)
-
-    # ## Load Test
-    # test_fold_path = os.path.join(config.data.preprocessed_dir, str(config.train.test_fold-1))
-    # for fragment in tqdm(os.listdir(test_fold_path), desc="Loading test fold"):
-    #     fragment_path = os.path.join(test_fold_path, fragment)
-    #     fragment_df = pd.read_csv(fragment_path)
-    #     df_list_test.append(fragment_df)
-
-
-    # # Convert to NumPy
-    # train_tensors = []
-    # test_tensors = []
-
-    # ## Train
-    # for fragment_df in tqdm(df_list_train, desc="Converting train dataset"):
-    #     X = fragment_df.iloc[:,1:config.train.model.input+1].values
-    #     # Convert label to proper number (accounting for chord complexity)
-    #     y = fragment_df["chord"].apply(
-    #         lambda chord: chord_tool.encode(
-    #             chord=chord_tool.reduce(chord, complexity),
-    #             type=complexity
-    #         )
-    #     ).values
-    #     X_tensor = torch.tensor(X, dtype=torch.float32)
-    #     y_tensor = torch.tensor(y, dtype=torch.long)
-
-    #     train_tensors.append((X_tensor, y_tensor))
-
-    # for fragment_df in tqdm(df_list_test, desc="Converting test dataset"):
-    #     X = fragment_df.iloc[:,1:config.train.model.input+1].values
-    #     # Convert label to proper number (accounting for chord complexity)
-    #     y = fragment_df["chord"].apply(
-    #         lambda chord: chord_tool.encode(
-    #             chord=chord_tool.reduce(chord, complexity),
-    #             type=complexity
-    #         )
-    #     ).values
-    #     X_tensor = torch.tensor(X, dtype=torch.float32)
-    #     y_tensor = torch.tensor(y, dtype=torch.long)
-
-    #     test_tensors.append((X_tensor, y_tensor))
 
     # Dataset
     train_dataset = SongDataset(train_tensors)

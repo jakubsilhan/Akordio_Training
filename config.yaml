@@ -4,30 +4,30 @@ data:
   dataset_dir: "D:/Development/Source/University/Diploma/chord-recognition/Datasets"
   datasets: [Beatles, Uspop2000]
   # datasets: [Beatles]
-  preprocessed_dir: "D:/Development/Source/University/Diploma/chord-recognition/Data/BaseDataset"
+  preprocessed_dir: "D:/Development/Source/University/Diploma/chord-recognition/Data/DetailedDataset"
   preprocess:
     pcp: False
     num_splits: 5
-    bins_per_octave: 24
-    cqt_bins: 144
-    hop_length: 2048
-    fragment_size: 108
+    bins_per_octave: 36
+    cqt_bins: 216
+    hop_length: 4096
+    fragment_size: 86
     pitch_shift_start: -6
     pitch_shift_end: 6
-    sampling_rate: 22050
+    sampling_rate: 44100
 train:
-  data_source: "D:/Development/Source/University/Diploma/chord-recognition/Data/BaseDataset"
+  data_source: "D:/Development/Source/University/Diploma/chord-recognition/Data/DetailedDataset"
   model_path: "D:/Development/Source/University/Diploma/chord-recognition/Models"
-  model_name: "crnn_144_majmin"
+  model_name: "crnn_216_majmin"
   test_fold: 5
   model_type: "crnn"
   model_complexity: "majmin"
   checkpoint_interval: 50
   model:
     batch_size: 128
-    input: 144
+    input: 216
     output: 25
-    hidden: 128
+    hidden: 256
     layers: 2
     bidirectional: True
     padding_index: -1
