@@ -8,7 +8,8 @@ from torch.utils.data import DataLoader
 from Utils.chords import Chords, Complexity
 from Core.config import Config, load_config
 from Core.song_dataset import SongDataset, make_collate_fn
-from Neural_Nets.CRNN import CRNN
+from Neural_Nets.CRNN import CR1
+from Neural_Nets.RNN import SimpleLSTM
 
 def compute_mean_std(dataloader):
     mean = 0.0
@@ -30,7 +31,6 @@ def compute_mean_std(dataloader):
 def test(config: Config):
     # Initialization
     model_folder = os.path.join(config.train.model_path, config.train.model_name, str(config.train.test_fold))
-    test_tensors = []
 
     chord_tool = Chords()
 
@@ -61,18 +61,17 @@ def test(config: Config):
 
         X_tensor = torch.tensor(X, dtype=torch.float32)
         y_tensor = torch.tensor(y, dtype=torch.long)
-        # test_tensors.append((X_tensor, y_tensor))
         fragments_song[song_name].append((X_tensor, y_tensor))
 
     match config.train.model_type:
+        case "SimpleLSTM":
+            model = SimpleLSTM(
+                config=config
+            ).to(device)
         case default:
-            model = CRNN(
-                feature_size=config.train.model.input,
-                output_features=config.train.model.output,
-                hidden_size=config.train.model.hidden,
-                num_layers=config.train.model.layers,
-                bidirectional=config.train.model.bidirectional,
-                device=device
+            model = CR1(
+                device=device,
+                config=config
             )
     
     model.to(device)
@@ -120,7 +119,7 @@ def test(config: Config):
                 preds = torch.softmax(logits, dim=2).argmax(dim=2)
 
                 predictions.extend(preds.view(-1).detach().cpu())
-                targets.extend(y_batch.view(-1).detach().cpu())
+                targets.extend(targs.view(-1).detach().cpu())
         
         predictions = [chord_tool.decode(chord, complexity) for chord in predictions]
         targets = [chord_tool.decode(chord, complexity) for  chord in targets]
@@ -160,12 +159,6 @@ def test(config: Config):
         pred_intervals = np.array(pred_int)
         targ_intervals = np.array(targ_int)
 
-        # print(pred_int)
-        # print(pred_lab)
-        # print(targ_int)
-        # print(targ_lab)
-        # exit(0)
-
         evals.append(mir_eval.chord.evaluate(targ_intervals, targ_lab, pred_intervals, pred_lab))
 
     # Accumulate sums
@@ -177,7 +170,7 @@ def test(config: Config):
     # Average
     average_eval = OrderedDict((k, aggregated[k] / len(evals)) for k in evals[0].keys())
 
-    print("\n🎵 Average chord evaluation metrics:")
+    print("\n Average chord evaluation metrics:")
     for k, v in average_eval.items():
         print(f"{k:>15}: {v:.4f}")
 

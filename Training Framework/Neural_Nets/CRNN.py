@@ -1,14 +1,16 @@
 import torch
+from Core.config import Config
 import torch.nn as nn
 
-class CRNN(nn.Module):
-    def __init__(self, feature_size, output_features, hidden_size, num_layers, bidirectional, device, dropout=(0.4,0,0)): # 12 + 1 and 6 + 1 for N chord
+class CR1(nn.Module):
+    def __init__(self, device, config: Config):
         super().__init__()
-        self.feature_size = feature_size
-        self.hidden_size = hidden_size
-        self.output_features = output_features
-        self.num_layers = num_layers
-        self.bidirectional = bidirectional
+        self.feature_size = config.train.model.input
+        self.hidden_size = config.train.model.hidden[0]
+        self.output_features = config.train.model.output
+        self.num_layers = config.train.model.layers
+        self.bidirectional = config.train.model.bidirectional
+        self.dropout = config.train.model.dropout
         self.device = device
         
         # Activation
@@ -16,14 +18,14 @@ class CRNN(nn.Module):
         
         # Batchnorm and dropout
         self.batch_norm = nn.BatchNorm2d(1)
-        self.dropout2 = nn.Dropout(p=dropout[2])
+        self.dropout2 = nn.Dropout(p=self.dropout[2])
 
         # Convolutional layer
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(5,5), padding=2)  # preserve sequence length
         self.conv2 = nn.Conv2d(1, 36, kernel_size=(1, self.feature_size))
 
         # Recurrent layers
-        self.gru = nn.GRU(input_size=36, hidden_size=self.hidden_size, num_layers=num_layers, batch_first=True, bidirectional=bidirectional)
+        self.gru = nn.GRU(input_size=36, hidden_size=self.hidden_size, num_layers=self.num_layers, batch_first=True, bidirectional=self.bidirectional)
 
         # Output
         self.fc = nn.Linear(self.hidden_size*2, self.output_features)

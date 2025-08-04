@@ -1,8 +1,13 @@
 from pydantic import BaseModel
 import yaml
 
+class PCPConfig(BaseModel):
+    enabled: bool
+    bins: int
+    octaves: int
+
 class PreprocessingConfig(BaseModel):
-    pcp: bool
+    pcp: PCPConfig
     num_splits: int
     bins_per_octave: int
     cqt_bins: int
@@ -22,7 +27,8 @@ class ModelConfig(BaseModel):
     batch_size: int
     input: int
     output: int
-    hidden: int
+    hidden: list
+    dropout: list
     layers: int
     bidirectional: bool
     padding_index: int

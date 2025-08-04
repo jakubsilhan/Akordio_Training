@@ -3,11 +3,13 @@ import pandas as pd
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 from Core.config import Config, load_config
 from Core.song_dataset import SongDataset, make_collate_fn
 from torch.utils.data import DataLoader
-from Neural_Nets.CRNN import CRNN
+from Neural_Nets.CRNN import CR1
+from Neural_Nets.RNN import SimpleLSTM
 from Utils.chords import Chords, Complexity
 
 def accuracy_fn(y_real, y_pred, padding_index):
@@ -110,15 +112,16 @@ def train(config: Config):
     test_dataloader = DataLoader(test_dataset, batch_size=config.train.model.batch_size, shuffle=False, collate_fn=make_collate_fn(config.train.model.padding_index))
 
     # Model
+    # TODO Add Transformer and CR2
     match config.train.model_type:
+        case "SimpleLSTM":
+            model = SimpleLSTM(
+                config=config
+            ).to(device)
         case default:
-            model = CRNN(
-                feature_size=config.train.model.input,
-                output_features=config.train.model.output,
-                hidden_size=config.train.model.hidden,
-                num_layers=config.train.model.layers,
-                bidirectional=config.train.model.bidirectional,
-                device=device
+            model = CR1(
+                device=device,
+                config=config
             )
 
     # Loss and optimizer
@@ -253,6 +256,26 @@ def train(config: Config):
     state_dict={'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch, 'loss': losses}
     torch.save(state_dict, model_path)
 
+    # Plot Loss
+    plt.figure(figsize=(12, 5))
+    plt.subplot(1,2,1)
+    plt.plot(train_loss_list, label="Train Loss")
+    plt.plot(test_loss_list, label="Test Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Loss Curve")
+    plt.legend()
+
+    # Plot Accuracy
+    plt.subplot(1, 2, 2)
+    plt.plot(train_accuracy_list, label="Train Accuracy")
+    plt.plot(test_accuracy_list, label="Test Accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy (%)")
+    plt.title("Accuracy Curve")
+    plt.legend()
+
+    plt.show()
 
 if __name__=="__main__":
     config = load_config("config.yaml")

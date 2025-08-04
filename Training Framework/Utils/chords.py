@@ -4,8 +4,7 @@ from enum import Enum
 PITCH_CLASS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 MAJMIN = ["maj", "min"]
 MAJMIN7 = ["maj", "min", "maj7", "min7", "7"]
-# TODO finish the implementation of complex type
-COMPLEX = ["maj", "min", "maj7", "min7", "7"]
+COMPLEX = ["maj", "min", "maj7", "min7", "7", "dim", "aug", "min6", "maj6", "minmaj7", "dim7", "hdim7", "sus2", "sus4"]
 
 class Complexity(Enum):
     MAJMIN = 1
@@ -47,6 +46,7 @@ class Chords:
         self.majmin_encodings = self._generate_encodings(PITCH_CLASS, MAJMIN)
         self.majmin7_encodings = self._generate_encodings(PITCH_CLASS, MAJMIN7)
         self.complex_encodings = self._generate_encodings(PITCH_CLASS, COMPLEX)
+        self.complex_encodings.append('X')
 
     # Encoding methods
     def encode(self, chord: str, type: Complexity) -> int:
@@ -203,7 +203,70 @@ class Chords:
             return f"{root}:maj"  # Default fallback
     
     def complex(self, chord: str) -> str:
-        return chord
+        '''
+        Reduces a chord label to one of the canonical COMPLEX chord types
+        based on its interval content.
+
+        Parameters
+        ----------
+        chord : str
+            e.g. "C:maj13", "D:min9", "G:dim7"
+
+        Returns
+        -------
+        reduced_chord : str
+            e.g. "C:maj7", "D:min7", "G:dim7"
+        '''
+        root, pc = self.deconstruct_chord(chord)
+
+        if root == "N":
+            return "N"
+
+        # Define pitch class intervals for checking
+        has = lambda i: pc[i % 12]
+
+        m3 = has(3)
+        M3 = has(4)
+        d5 = has(6)
+        P5 = has(7)
+        A5 = has(8)
+        m6 = has(8)
+        M6 = has(9)
+        m7 = has(10)
+        M7 = has(11)
+        sus2 = has(2) and not m3 and not M3
+        sus4 = has(5) and not m3 and not M3
+
+        if sus2:
+            return f"{root}:sus2"
+        elif sus4:
+            return f"{root}:sus4"
+        elif m3 and d5 and has(9):
+            return f"{root}:dim7"
+        elif m3 and d5 and m7:
+            return f"{root}:hdim7"
+        elif m3 and d5:
+            return f"{root}:dim"
+        elif M3 and A5:
+            return f"{root}:aug"
+        elif m3 and m7 and M6:
+            return f"{root}:min6"
+        elif M3 and M6 and not m7:
+            return f"{root}:maj6"
+        elif m3 and M7:
+            return f"{root}:minmaj7"
+        elif M3 and M7:
+            return f"{root}:maj7"
+        elif m3 and m7:
+            return f"{root}:min7"
+        elif M3 and m7:
+            return f"{root}:7"
+        elif M3:
+            return f"{root}:maj"
+        elif m3:
+            return f"{root}:min"
+        else:
+            return f"X"  # Uknown
 
     # Interval methods
     def deconstruct_chord(self, chord: str) -> tuple:

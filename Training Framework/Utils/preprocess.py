@@ -27,7 +27,7 @@ class Preprocess():
         all_files = []
         for path, _, files in os.walk(os.path.join(dataset_path, "Audio")):
             for filename in files:
-                all_files.append((path, filename)) # dataset/Audio/path, song.mp3
+                all_files.append((path, filename))
 
         kf = KFold(self.config.data.preprocess.num_splits, shuffle=True, random_state=self.config.base.random_seed)
         fold_pbar = tqdm(total=self.config.data.preprocess.num_splits, desc="Generating folds")
@@ -61,22 +61,24 @@ class Preprocess():
               pd.DataFrame({"chord": labels})
             ], axis=1)
 
-            # Maybe other edits
-
             # Saving
             save_base = filename.replace(".mp3", "").split("_-_")[-1]
             self.save_fragments(song_df, save_base, fold, shift_factor)
 
     def process_features(self, y):
         '''
-        Processes audio into a log CQT
+        Processes audio into a log CQT or chromagram
         '''
-        C = np.abs(librosa.cqt(y, sr=self.config.data.preprocess.sampling_rate, bins_per_octave=self.config.data.preprocess.bins_per_octave,n_bins=self.config.data.preprocess.cqt_bins, hop_length=self.config.data.preprocess.hop_length))
-        C = librosa.amplitude_to_db(C, ref=np.max)
-        C = C.T
-        times = librosa.frames_to_time(np.arange(C.shape[0]), sr=self.config.data.preprocess.sampling_rate, hop_length=self.config.data.preprocess.hop_length)
+        if self.config.data.preprocess.pcp.enabled:
+            features = librosa.feature.chroma_cqt(y=y, sr=self.config.data.preprocess.sampling_rate, bins_per_octave=self.config.data.preprocess.bins_per_octave, hop_length=self.config.data.preprocess.hop_length, n_chroma=self.config.data.preprocess.pcp.bins, n_octaves=self.config.data.preprocess.pcp.octaves)
+        else:
+            features = np.abs(librosa.cqt(y, sr=self.config.data.preprocess.sampling_rate, bins_per_octave=self.config.data.preprocess.bins_per_octave,n_bins=self.config.data.preprocess.cqt_bins, hop_length=self.config.data.preprocess.hop_length))
+            features = librosa.amplitude_to_db(features, ref=np.max)
+    
+        features = features.T
+        times = librosa.frames_to_time(np.arange(features.shape[0]), sr=self.config.data.preprocess.sampling_rate, hop_length=self.config.data.preprocess.hop_length)
 
-        return C, times
+        return features, times
 
     def load_annotation(self, path: str, filename: str) -> list[tuple[float, float, str]]:
         '''
@@ -107,7 +109,7 @@ class Preprocess():
         '''
         Shifts the label root according to the shift factor
         '''
-        # TODO consider keeping the bass and adds
+        # TODO consider keeping the bass and adds (not used for now)
         root, type_name, adds, bass = chord, '', [], ''
 
         note_list = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -127,8 +129,11 @@ class Preprocess():
             root, type_name = chord.split(':', maxsplit=1)
             if type_name == '':
                 type_name = 'maj'
+        elif len(chord) >= 2 and chord[1] in ['b', '#']:
+            root = chord[:2]
+            type_name = chord[2:]
         else:
-            root = chord
+            root = chord[:1]
             type_name = 'maj'
 
         root_note = self.normalize_note(root)
