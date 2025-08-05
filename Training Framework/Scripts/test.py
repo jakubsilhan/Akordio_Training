@@ -8,8 +8,8 @@ from torch.utils.data import DataLoader
 from Utils.chords import Chords, Complexity
 from Core.config import Config, load_config
 from Core.song_dataset import SongDataset, make_collate_fn
-from Neural_Nets.CRNN import CR1
-from Neural_Nets.RNN import SimpleLSTM
+from Neural_Nets.CR1 import Model as CR1
+from Neural_Nets.SimpleLSTM import Model as SimpleLSTM
 
 def compute_mean_std(dataloader):
     mean = 0.0
@@ -70,9 +70,8 @@ def test(config: Config):
             ).to(device)
         case default:
             model = CR1(
-                device=device,
                 config=config
-            )
+            ).to(device)
     
     model.to(device)
     model_path = os.path.join(model_folder, "final_model.pt")
@@ -115,7 +114,7 @@ def test(config: Config):
 
             with torch.inference_mode():
                 #### 1. Forward pass
-                logits = model(X_batch, device)
+                logits = model(X_batch)
                 preds = torch.softmax(logits, dim=2).argmax(dim=2)
 
                 predictions.extend(preds.view(-1).detach().cpu())

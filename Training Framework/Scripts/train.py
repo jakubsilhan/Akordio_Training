@@ -8,8 +8,8 @@ from tqdm import tqdm
 from Core.config import Config, load_config
 from Core.song_dataset import SongDataset, make_collate_fn
 from torch.utils.data import DataLoader
-from Neural_Nets.CRNN import CR1
-from Neural_Nets.RNN import SimpleLSTM
+from Neural_Nets.CR1 import Model as CR1
+from Neural_Nets.SimpleLSTM import Model as SimpleLSTM
 from Utils.chords import Chords, Complexity
 
 def accuracy_fn(y_real, y_pred, padding_index):
@@ -46,6 +46,7 @@ def train(config: Config):
     model_folder = os.path.join(config.train.model_path, config.train.model_name, str(config.train.test_fold))
     os.makedirs(model_folder, exist_ok=True)
     shutil.copy2("config.yaml", model_folder)
+    # Copy and rename neural net
 
     match config.train.model_complexity:
         case "complex":
@@ -120,9 +121,8 @@ def train(config: Config):
             ).to(device)
         case default:
             model = CR1(
-                device=device,
                 config=config
-            )
+            ).to(device)
 
     # Loss and optimizer
     model.to(device)
@@ -170,7 +170,7 @@ def train(config: Config):
             targets = y_batch
 
             #### 1. Forward pass
-            logits = model(X_batch, device)
+            logits = model(X_batch)
             preds = torch.softmax(logits, dim=2).argmax(dim=2)
 
             #### 2. Loss and accuracy
@@ -206,7 +206,7 @@ def train(config: Config):
 
             with torch.inference_mode():
                 #### 1. Forward pass
-                logits = model(X_batch, device)
+                logits = model(X_batch)
                 preds = torch.softmax(logits, dim=2).argmax(dim=2)
 
                 #### 2. Loss and accuracy

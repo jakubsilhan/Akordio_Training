@@ -147,10 +147,30 @@ class Preprocess():
         '''
         Splits the song dataframe into fixed-size fragments (in frames) and saves them as individual npz files
         '''
+        if self.config.data.preprocess.pcp.enabled:
+            input_dim = self.config.data.preprocess.pcp.bins
+        else:
+            input_dim = config.data.preprocess.cqt_bins
+
+        # Full song mode
+        if self.config.data.preprocess.fragment_size <= 0:
+            # Extract into numpy arrays
+            timestamps = song_df.iloc[:, 0].values.astype(np.float32)
+            X = song_df.iloc[:, 1:1 + input_dim].values.astype(np.float32) # skip timestamp
+            y = song_df["chord"].values.astype(str)
+
+            # Prepare pathing
+            song_filename = f"{base_name}_shift{shift_factor:02d}.npz"
+            song_path = os.path.join(self.config.data.preprocessed_dir, str(fold), song_filename)
+            os.makedirs(os.path.dirname(song_path), exist_ok=True)
+
+            # Save into npz
+            np.savez_compressed(song_path, timestamps=timestamps, X=X, y=y)
+            return
+
+        # Fragmenting mode
         num_rows = len(song_df)
         num_fragments = num_rows // self.config.data.preprocess.fragment_size
-        input_dim = config.train.model.input
-
         for i in range(num_fragments):
             fragment = song_df.iloc[i * self.config.data.preprocess.fragment_size : (i + 1) * self.config.data.preprocess.fragment_size]
 

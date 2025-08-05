@@ -288,7 +288,7 @@ class Chords:
         root, quality = chord.split(":")[:2]
         quality_pitches = self.pitches.get(quality)
         if quality_pitches is None:
-            print(f"Quality not recognized: {chord}")
+            # print(f"Quality not recognized: {chord}")
             quality_pitches = self.pitches.get("maj")
         return (root, quality_pitches)
 
