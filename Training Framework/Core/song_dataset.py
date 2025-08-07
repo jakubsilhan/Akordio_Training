@@ -4,10 +4,10 @@ from torch.nn.utils.rnn import pad_sequence
 class SongDataset(Dataset):
     def __init__(self, song_tensors):
         """
-        Initializes the dataset with song tensors.
-        Each song tensor is a tuple (X, y), where:
-        X = feature sequence (chroma)
-        y = target sequence (maj_min)
+        Initializes the dataset with song samples.
+        Each song sample is a tuple pf tensors (X, y), where:
+        X = sequence of feature vectors (chroma/cqt)
+        y = sequence of labels (maj_min)
         """
         self.song_tensors = song_tensors
 

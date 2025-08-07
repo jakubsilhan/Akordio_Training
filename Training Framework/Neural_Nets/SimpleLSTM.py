@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from Core.config import Config
 
 class Model(nn.Module):
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, device):
         super().__init__()
         self.feature_size = config.train.model.input
         self.hidden_size = config.train.model.hidden[0]
@@ -13,6 +13,7 @@ class Model(nn.Module):
         self.num_layers = config.train.model.layers
         self.dropout = config.train.model.dropout[0]
         self.bidirectional = config.train.model.bidirectional
+        self.device = device
         
         # LSTM layers
         self.lstm = nn.LSTM(self.feature_size, self.hidden_size, self.num_layers, dropout=self.dropout, batch_first=True, bidirectional=self.bidirectional)

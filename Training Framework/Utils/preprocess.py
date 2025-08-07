@@ -71,6 +71,8 @@ class Preprocess():
         '''
         if self.config.data.preprocess.pcp.enabled:
             features = librosa.feature.chroma_cqt(y=y, sr=self.config.data.preprocess.sampling_rate, bins_per_octave=self.config.data.preprocess.bins_per_octave, hop_length=self.config.data.preprocess.hop_length, n_chroma=self.config.data.preprocess.pcp.bins, n_octaves=self.config.data.preprocess.pcp.octaves)
+            # TODO consider normalization in PCP
+            # features = librosa.util.normalize(features, axis=0)
         else:
             features = np.abs(librosa.cqt(y, sr=self.config.data.preprocess.sampling_rate, bins_per_octave=self.config.data.preprocess.bins_per_octave,n_bins=self.config.data.preprocess.cqt_bins, hop_length=self.config.data.preprocess.hop_length))
             features = librosa.amplitude_to_db(features, ref=np.max)

@@ -66,11 +66,13 @@ def test(config: Config):
     match config.train.model_type:
         case "SimpleLSTM":
             model = SimpleLSTM(
-                config=config
+                config=config,
+                device=device
             ).to(device)
         case default:
             model = CR1(
-                config=config
+                config=config,
+                device=device
             ).to(device)
     
     model.to(device)
@@ -154,6 +156,25 @@ def test(config: Config):
         targ_int.append([start_targ*frame_duration, len(targets)*frame_duration])
         targ_lab.append(prev_chord_targ)
 
+        output_dir = os.path.join("Test_Outputs", name)
+        os.makedirs(output_dir, exist_ok=True)
+        # Save preds
+        pred_str = ""
+        for label, (start, end) in zip(pred_lab, pred_int):
+            pred_str += f'{start:3f} {end:3f} {label} \n'
+
+        with open(os.path.join(output_dir, "preds.lab"), "w") as file:
+            file.write(pred_str)
+
+        # Save targets
+        targ_str = ""
+        for label, (start, end) in zip(targ_lab, targ_int):
+            targ_str += f'{start:3f} {end:3f} {label} \n'
+
+        with open(os.path.join(output_dir, "targs.lab"), "w") as file:
+            file.write(targ_str)
+
+            
         # Numpy conversion
         pred_intervals = np.array(pred_int)
         targ_intervals = np.array(targ_int)

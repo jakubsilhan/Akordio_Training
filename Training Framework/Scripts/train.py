@@ -46,7 +46,6 @@ def train(config: Config):
     model_folder = os.path.join(config.train.model_path, config.train.model_name, str(config.train.test_fold))
     os.makedirs(model_folder, exist_ok=True)
     shutil.copy2("config.yaml", model_folder)
-    # Copy and rename neural net
 
     match config.train.model_complexity:
         case "complex":
@@ -116,12 +115,16 @@ def train(config: Config):
     # TODO Add Transformer and CR2
     match config.train.model_type:
         case "SimpleLSTM":
+            shutil.copy2("Neural_Nets/SimpleLSTM.py", model_folder+"/Model.py")
             model = SimpleLSTM(
-                config=config
+                config=config,
+                device=device
             ).to(device)
         case default:
+            shutil.copy2("Neural_Nets/CR1.py", model_folder+"/Model.py")
             model = CR1(
-                config=config
+                config=config,
+                device=device
             ).to(device)
 
     # Loss and optimizer

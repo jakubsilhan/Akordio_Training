@@ -3,44 +3,36 @@ import numpy as np
 from Core.config import Config
 from Model.Model import Model
 
+# Use fragmenting here into samples of length according to config
+
 def classify_chords(x_tensor: torch.Tensor, config: Config):
-    # TODO figure out device
     # device agnostic code
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # prepare data
-    # x_tensor.to(device)
+    x_tensor.to(device)
     x_tensor = x_tensor.unsqueeze(1)
     mean, std = compute_mean_std(x_tensor)
     x_tensor = (x_tensor-mean)/std
 
     # Load model
-    # model = load_model(config, device)
-    model = load_model(config)
+    model = load_model(config, device)
 
     # Inference
     with torch.inference_mode():
-        # logits = model(x_tensor, device)
         logits = model(x_tensor)
         preds = torch.softmax(logits, dim=2).argmax(dim=2)
 
     return preds
 
-# def load_model(config: Config, device: str) -> Model:
-#     model = Model(config=config).to(device)
-#     model_path = os.path.join("Model", "final_model.pt")
-#     loaded = torch.load(model_path, map_location=device)
-#     model.load_state_dict(loaded["model"])
-
-#     return model
-
-def load_model(config: Config) -> Model:
-    model = Model(config=config)
+def load_model(config: Config, device: str) -> Model:
+    model = Model(config=config, device=device).to(device)
     model_path = os.path.join("Model", "final_model.pt")
-    loaded = torch.load(model_path)
+    loaded = torch.load(model_path, map_location=device)
     model.load_state_dict(loaded["model"])
 
     return model
+
 
 def compute_mean_std(tensor: torch.Tensor):
     mean = torch.mean(tensor).item()
