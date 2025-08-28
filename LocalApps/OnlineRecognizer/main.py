@@ -66,9 +66,9 @@ def Run():
             pred_ids = chord_pred[0].cpu().numpy()
             counts = np.bincount(pred_ids, minlength=config.train.model.output)
 
-            # Penalize "N"
-            NO_CHORD_IDX = 0 # index of N
-            counts[NO_CHORD_IDX] = int(counts[NO_CHORD_IDX] * 0.05)  # reduce its vote weight
+            # # Penalize "N"
+            # NO_CHORD_IDX = 0 # index of N
+            # counts[NO_CHORD_IDX] = int(counts[NO_CHORD_IDX] * 0.05)  # reduce its vote weight
 
             majority_chord = counts.argmax()
             

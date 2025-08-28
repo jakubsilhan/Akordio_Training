@@ -27,7 +27,6 @@ def compute_mean_std(dataloader):
 
     return mean, std
 
-
 def test(config: Config):
     # Initialization
     model_folder = os.path.join(config.train.model_path, config.train.model_name, str(config.train.test_fold))

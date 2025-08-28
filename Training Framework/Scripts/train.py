@@ -112,7 +112,7 @@ def train(config: Config):
     test_dataloader = DataLoader(test_dataset, batch_size=config.train.model.batch_size, shuffle=False, collate_fn=make_collate_fn(config.train.model.padding_index))
 
     # Model
-    # TODO Add Transformer and CR2
+    # TODO Add Transformer, CR2 and a PCP RNN
     match config.train.model_type:
         case "SimpleLSTM":
             shutil.copy2("Neural_Nets/SimpleLSTM.py", model_folder+"/Model.py")
