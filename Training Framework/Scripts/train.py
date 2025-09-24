@@ -10,7 +10,7 @@ from Core.song_dataset import SongDataset, make_collate_fn
 from torch.utils.data import DataLoader
 from Neural_Nets.CR1 import Model as CR1
 from Neural_Nets.SimpleLSTM import Model as SimpleLSTM
-from Utils.chords import Chords, Complexity
+from Core.chords import Chords, Complexity
 
 def accuracy_fn(y_real, y_pred, padding_index):
     # Flatten inputs 
@@ -68,7 +68,10 @@ def train(config: Config):
     # TODO add the check here
 
     ## Load Train
+    # TODO add checks for missing folds
     for fold in tqdm(os.listdir(config.train.data_source), desc="Loading train folds"):
+        if fold == "config.yaml":
+            continue
         if fold == str(config.train.test_fold - 1):
             continue
 
@@ -277,7 +280,8 @@ def train(config: Config):
     plt.ylabel("Accuracy (%)")
     plt.title("Accuracy Curve")
     plt.legend()
-
+    figure_path = os.path.join(model_folder, "learning_curve.png")
+    plt.savefig(figure_path)
     plt.show()
 
 if __name__=="__main__":

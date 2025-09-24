@@ -24,13 +24,13 @@ class Model(nn.Module):
             hidden_n = self.hidden_size
         self.output_layer = nn.Linear(hidden_n, self.output_size)
 
-    def forward(self, X, device):
+    def forward(self, X):
         if self.lstm.bidirectional:
             hidden_n = self.num_layers*2
         else:
             hidden_n = self.num_layers
-        hidden_states = torch.zeros(hidden_n, X.size(0), self.hidden_size).to(device)
-        cell_states = torch.zeros(hidden_n, X.size(0), self.hidden_size).to(device)
+        hidden_states = torch.zeros(hidden_n, X.size(0), self.hidden_size).to(self.device)
+        cell_states = torch.zeros(hidden_n, X.size(0), self.hidden_size).to(self.device)
 
         # Forward pass through the LSTM
         out, _ = self.lstm(X, (hidden_states, cell_states))

@@ -1,29 +1,30 @@
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-import os, librosa, shutil
+import os, librosa, shutil, io, torch
 from sklearn.model_selection import KFold
 from Core.config import Config, load_config
 
-class Preprocess():
+class Preprocessor():
     def __init__(self, config: Config):
         self.config = config
 
-    def process_all_data(self):
+    def process_all_data(self) -> None:
         '''
         Goes through all specified data and processes them into a dataset according to configuration
         '''
         if os.path.exists(self.config.data.preprocessed_dir):
             shutil.rmtree(self.config.data.preprocessed_dir)
         os.makedirs(self.config.data.preprocessed_dir)
-        for dataset in tqdm(config.data.datasets, desc="Processing datasets"):
+        for dataset in tqdm(self.config.data.datasets, desc="Processing datasets"):
             self.process_dataset(dataset)
+        shutil.copy2("config.yaml", self.config.data.preprocessed_dir)
 
-    def process_dataset(self, dataset):
+    def process_dataset(self, dataset: str) -> None:
         '''
         Goes through all songs in a dataset a processes them
         '''
-        dataset_path = os.path.join(config.data.dataset_dir, dataset)
+        dataset_path = os.path.join(self.config.data.dataset_dir, dataset)
         all_files = []
         for path, _, files in os.walk(os.path.join(dataset_path, "Audio")):
             for filename in files:
@@ -41,7 +42,7 @@ class Preprocess():
             fold_pbar.update(1)
         fold_pbar.close()
 
-    def process_song(self, path: str, filename: str, fold: int):
+    def process_song(self, path: str, filename: str, fold: int) -> None:
         '''
         Processes a song and applies pitch shifting aswell if needed
         '''
@@ -65,7 +66,36 @@ class Preprocess():
             save_base = filename.replace(".mp3", "").split("_-_")[-1]
             self.save_fragments(song_df, save_base, fold, shift_factor)
 
-    def process_features(self, y):
+    def process_audio(self, audio: bytes) -> list[torch.Tensor]:
+        """
+        Processes audio into features according to the config
+        """
+        
+        # Load audio
+        audio_buffer = io.BytesIO(audio)
+        audio_buffer.seek(0)
+        x, sr = librosa.load(audio_buffer, sr=self.config.data.preprocess.sampling_rate)
+
+        # Extract features
+        features,_ = self.process_features(x)
+
+        # Split into fragments
+        fragment_size = self.config.data.preprocess.fragment_size
+        fragments = []
+
+        # Return with no fragmenting
+        if fragment_size == 0:
+            fragments.append(torch.tensor(features, dtype=torch.float32))
+            return fragments
+        
+        # Fragment
+        for start in range(0, len(features), fragment_size):
+            fragment = features[start:start+fragment_size]
+            fragments.append(torch.tensor(fragment, dtype=torch.float32))
+        
+        return fragments
+
+    def process_features(self, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         '''
         Processes audio into a log CQT or chromagram
         '''
@@ -97,7 +127,7 @@ class Preprocess():
 
         return intervals
     
-    def shift_annotation(self, intervals: list[tuple[float, float, str]], shift_factor):
+    def shift_annotation(self, intervals: list[tuple[float, float, str]], shift_factor) -> list:
         '''
         Shift labels in the annotations according to the shift factor
         '''
@@ -152,7 +182,7 @@ class Preprocess():
         if self.config.data.preprocess.pcp.enabled:
             input_dim = self.config.data.preprocess.pcp.bins
         else:
-            input_dim = config.data.preprocess.cqt_bins
+            input_dim = self.config.data.preprocess.cqt_bins
 
         # Full song mode
         if self.config.data.preprocess.fragment_size <= 0:
@@ -191,7 +221,7 @@ class Preprocess():
 
 
 
-    def assign_labels_to_times(self, times, intervals):
+    def assign_labels_to_times(self, times, intervals) -> np.ndarray:
         '''
         Creates an array of chord alligned to specific timings
         '''
@@ -208,7 +238,7 @@ class Preprocess():
         
         return np.array(labels)
     
-    def normalize_note(self, note):
+    def normalize_note(self, note: str) -> str:
         '''
         Normalizes flats
         '''
@@ -228,7 +258,7 @@ class Preprocess():
         return note
     
 
-if __name__ == "__main__":
-    config = load_config("config.yaml")
-    preprocessing = Preprocess(config)
-    preprocessing.process_all_data()
+# if __name__ == "__main__":
+#     config = load_config("config.yaml")
+#     preprocessing = Preprocess(config)
+#     preprocessing.process_all_data()

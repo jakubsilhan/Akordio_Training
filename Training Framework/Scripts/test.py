@@ -1,11 +1,11 @@
 from collections import defaultdict, OrderedDict
-import os
+import os, json
 import mir_eval
 import numpy as np
 import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from Utils.chords import Chords, Complexity
+from Core.chords import Chords, Complexity
 from Core.config import Config, load_config
 from Core.song_dataset import SongDataset, make_collate_fn
 from Neural_Nets.CR1 import Model as CR1
@@ -46,6 +46,7 @@ def test(config: Config):
     # Loading data
     fragments_song = defaultdict(list)
     test_fold_path = os.path.join(config.train.data_source, str(config.train.test_fold - 1))
+    # TODO add fragmentation
     for fragment in tqdm(os.listdir(test_fold_path), desc="Loading test fold"):
         if not fragment.endswith(".npz"):
             continue
@@ -188,6 +189,10 @@ def test(config: Config):
 
     # Average
     average_eval = OrderedDict((k, aggregated[k] / len(evals)) for k in evals[0].keys())
+
+    # Save to file
+    with open(os.path.join(model_folder, 'test_mir_eval.json'), 'w') as f:
+        f.write(json.dumps(average_eval))
 
     print("\n Average chord evaluation metrics:")
     for k, v in average_eval.items():
