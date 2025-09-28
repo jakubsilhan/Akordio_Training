@@ -5,12 +5,13 @@ import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from Core.config import Config, load_config
-from Core.song_dataset import SongDataset, make_collate_fn
+from core.net_config import Config, load_config
+from core.song_dataset import SongDataset, make_collate_fn
 from torch.utils.data import DataLoader
 from Neural_Nets.CR1 import Model as CR1
 from Neural_Nets.SimpleLSTM import Model as SimpleLSTM
-from Core.chords import Chords, Complexity
+from Neural_Nets.BTC import Model as BTC
+from core.chords import Chords, Complexity
 
 def accuracy_fn(y_real, y_pred, padding_index):
     # Flatten inputs 
@@ -25,20 +26,11 @@ def accuracy_fn(y_real, y_pred, padding_index):
     acc = (correct / total) * 100 if total > 0 else 0.0
     return acc
 
-def compute_mean_std(dataloader):
-    mean = 0.0
-    square_mean = 0.0
-    num_batches = 0
-
-    for X_batch, y_batch in dataloader:
-        mean += torch.mean(X_batch).item()
-        square_mean += torch.mean(X_batch.pow(2)).item()
-        num_batches += 1
-
-    mean /= num_batches
-    square_mean /= num_batches
-    std = np.sqrt(square_mean - mean * mean)
-
+def compute_mean_std(dataset):
+    # Concatenate all tensors
+    all_data = torch.cat([X for X, _ in dataset], dim=0)  # shape: (total_frames, feature_dim)
+    mean = all_data.mean().item()
+    std = all_data.std().item()
     return mean, std
 
 def train(config: Config):
@@ -123,6 +115,12 @@ def train(config: Config):
                 config=config,
                 device=device
             ).to(device)
+        case "BTC":
+            shutil.copy2("Neural_Nets/BTC.py", model_folder+"/Model.py")
+            model = BTC(
+                config=config, 
+                device=device
+            ).to(device)
         case default:
             shutil.copy2("Neural_Nets/CR1.py", model_folder+"/Model.py")
             model = CR1(
@@ -138,10 +136,8 @@ def train(config: Config):
 
     # TODO add checkpoint load here if able
 
-
     # data info
-    train_mean, train_std = compute_mean_std(train_dataloader)
-    test_mean, test_std = compute_mean_std(test_dataloader)
+    train_mean, train_std = compute_mean_std(train_dataset)
 
     # Training loop
     torch.manual_seed(config.base.random_seed)
@@ -172,8 +168,13 @@ def train(config: Config):
             y_batch = y_batch.to(device)
 
             #### Normalization
+            ##### Per Dataset
             X_batch = (X_batch-train_mean)/train_std
             targets = y_batch
+
+            ##### Per tensor
+            if config.data.preprocess.pcp.enabled:
+                X_batch = X_batch / (X_batch.sum(dim=-1, keepdim=True) + 1e-8) # Normalize to sum = 1 for pcp
 
             #### 1. Forward pass
             logits = model(X_batch)
@@ -207,7 +208,7 @@ def train(config: Config):
             y_batch = y_batch.to(device)
 
             #### Normalization
-            X_batch = (X_batch-test_mean)/test_std
+            X_batch = (X_batch-train_mean)/train_std
             targets = y_batch
 
             with torch.inference_mode():
@@ -233,8 +234,12 @@ def train(config: Config):
                 'test_losses': test_loss_list,
                 'test_accuracies': test_accuracy_list
             }
+            normalization = {
+                'mean': train_mean,
+                'std': train_std
+            }
             checkpoint_path = os.path.join(model_folder, f"checkpoint_epoch_{epoch+1}.pt")
-            checkpoint_dict={'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch, 'loss': losses}
+            checkpoint_dict={'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch, 'loss': losses, 'normalization': normalization}
             torch.save(checkpoint_dict, checkpoint_path)
 
         ### Characteristics
@@ -256,10 +261,14 @@ def train(config: Config):
         'test_losses': test_loss_list,
         'test_accuracies': test_accuracy_list
     }
+    normalization = {
+                'mean': train_mean,
+                'std': train_std
+    }
 
     # Save model
     model_path = os.path.join(model_folder, "final_model.pt")
-    state_dict={'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch, 'loss': losses}
+    state_dict={'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch, 'loss': losses, 'normalization': normalization}
     torch.save(state_dict, model_path)
 
     # Plot Loss

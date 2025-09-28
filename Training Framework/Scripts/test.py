@@ -5,27 +5,12 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from Core.chords import Chords, Complexity
-from Core.config import Config, load_config
-from Core.song_dataset import SongDataset, make_collate_fn
+from core.chords import Chords, Complexity
+from core.net_config import Config, load_config
+from core.song_dataset import SongDataset, make_collate_fn
 from Neural_Nets.CR1 import Model as CR1
 from Neural_Nets.SimpleLSTM import Model as SimpleLSTM
-
-def compute_mean_std(dataloader):
-    mean = 0.0
-    square_mean = 0.0
-    num_batches = 0
-
-    for X_batch, y_batch in dataloader:
-        mean += torch.mean(X_batch).item()
-        square_mean += torch.mean(X_batch.pow(2)).item()
-        num_batches += 1
-
-    mean /= num_batches
-    square_mean /= num_batches
-    std = np.sqrt(square_mean - mean * mean)
-
-    return mean, std
+from Neural_Nets.BTC import Model as BTC
 
 def test(config: Config):
     # Initialization
@@ -46,7 +31,6 @@ def test(config: Config):
     # Loading data
     fragments_song = defaultdict(list)
     test_fold_path = os.path.join(config.train.data_source, str(config.train.test_fold - 1))
-    # TODO add fragmentation
     for fragment in tqdm(os.listdir(test_fold_path), desc="Loading test fold"):
         if not fragment.endswith(".npz"):
             continue
@@ -69,6 +53,11 @@ def test(config: Config):
                 config=config,
                 device=device
             ).to(device)
+        case "BTC":
+            model = BTC(
+                config=config,
+                device=device
+            ).to(device)
         case default:
             model = CR1(
                 config=config,
@@ -79,14 +68,13 @@ def test(config: Config):
     model_path = os.path.join(model_folder, "final_model.pt")
     loaded = torch.load(model_path, map_location=device)
     model.load_state_dict(loaded['model'])
+    normalization = loaded['normalization']
 
     evals = []
 
     for name, tensors in fragments_song.items():
         song_dataset = SongDataset(tensors)
         song_dataloader = DataLoader(song_dataset, batch_size=8, shuffle=False, collate_fn=make_collate_fn(config.train.model.padding_index))
-
-        test_mean, test_std = compute_mean_std(song_dataloader)
 
         # Initializations
         start_pred = 0
@@ -111,7 +99,7 @@ def test(config: Config):
             y_batch = y_batch.to(device)
 
             #### Normalization
-            X_batch = (X_batch-test_mean)/test_std
+            X_batch = (X_batch-normalization['mean'])/normalization['std']
             targs = y_batch
 
             with torch.inference_mode():

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from Core.config import Config
+from core.net_config import Config
 
 class Model(nn.Module):
     def __init__(self, config: Config, device):

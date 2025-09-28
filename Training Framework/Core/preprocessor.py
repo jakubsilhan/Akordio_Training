@@ -3,7 +3,7 @@ import pandas as pd
 from tqdm import tqdm
 import os, librosa, shutil, io, torch
 from sklearn.model_selection import KFold
-from Core.config import Config, load_config
+from .net_config import Config, load_config
 
 class Preprocessor():
     def __init__(self, config: Config):
