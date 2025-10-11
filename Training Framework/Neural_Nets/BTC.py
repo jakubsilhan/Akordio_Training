@@ -1,6 +1,3 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,10 +8,140 @@ from core.net_config import Config
 
 use_cuda = torch.cuda.is_available()
 
-class self_attention_block(nn.Module):
+class Model(nn.Module):
+    def __init__(self, config: Config, device):
+        super(Model, self).__init__()
+
+        self.timestep = config.data.preprocess.fragment_size
+        self.device = device
+
+        params = (config.train.model.input,
+                  config.train.model.hidden[0],
+                  config.train.model.layers,
+                  4, # num heads
+                  128, # total key depth
+                  128, # total value depth
+                  128, # filter size
+                  config.data.preprocess.fragment_size,
+                  config.train.model.dropout[0], # input dropout
+                  config.train.model.dropout[1], # layer dropout
+                  config.train.model.dropout[2], # attention dropout
+                  config.train.model.dropout[3]) # relu dropout
+
+        self.self_attn_layers = BiDirectionalSelfAttentionLayers(*params)
+        self.output_projection = nn.Linear(config.train.model.hidden[0], config.train.model.output)
+
+    def forward(self, x):
+        # Output of Bi-directional Self-attention Layers
+        self_attn_output, weights_list = self.self_attn_layers(x)
+        logits = self.output_projection(self_attn_output)
+        return logits
+
+# Transformer modules
+class BiDirectionalSelfAttentionLayers(nn.Module):
+    """
+    Multilayer block made from stacking BiDirectionalSelfAttention blocks
+    """
+    def __init__(self, embedding_size, hidden_size, num_layers, num_heads, total_key_depth, total_value_depth,
+                 filter_size, max_length=100, input_dropout=0.0, layer_dropout=0.0,
+                 attention_dropout=0.0, relu_dropout=0.0):
+        super(BiDirectionalSelfAttentionLayers, self).__init__()
+
+        self.timing_signal = _gen_timing_signal(max_length, hidden_size)
+        params = (hidden_size,
+                  total_key_depth or hidden_size,
+                  total_value_depth or hidden_size,
+                  filter_size,
+                  num_heads,
+                  max_length,
+                  layer_dropout,
+                  attention_dropout,
+                  relu_dropout)
+        self.embedding_proj = nn.Linear(embedding_size, hidden_size, bias=False)
+        self.self_attn_layers = nn.Sequential(*[BiDirectionalSelfAttention(*params) for l in range(num_layers)])
+        self.layer_norm = LayerNorm(hidden_size)
+        self.input_dropout = nn.Dropout(input_dropout)
+
+    def forward(self, inputs):
+        # Add input dropout
+        x = self.input_dropout(inputs)
+
+        # Project to hidden size
+        x = self.embedding_proj(x)
+
+        # Add timing signal
+        x += self.timing_signal[:, :inputs.shape[1], :].type_as(inputs.data)
+
+        # A Stack of Bi-directional Self-attention Layers
+        y, weights_list = self.self_attn_layers((x, []))
+
+        # Layer Normalization
+        y = self.layer_norm(y)
+        return y, weights_list
+
+class BiDirectionalSelfAttention(nn.Module):
+    """
+    Bi-directional attention block created from two SelfAttentionBlock modules
+    """
+    def __init__(self, hidden_size, total_key_depth, total_value_depth, filter_size, num_heads, max_length,
+                 layer_dropout=0.0, attention_dropout=0.0, relu_dropout=0.0):
+
+        super(BiDirectionalSelfAttention, self).__init__()
+
+        self.weights_list = list()
+
+        params = (hidden_size,
+                  total_key_depth or hidden_size,
+                  total_value_depth or hidden_size,
+                  filter_size,
+                  num_heads,
+                  _gen_bias_mask(max_length),
+                  layer_dropout,
+                  attention_dropout,
+                  relu_dropout,
+                  True)
+
+        self.attn_block = SelfAttentionBlock(*params)
+
+        params = (hidden_size,
+                  total_key_depth or hidden_size,
+                  total_value_depth or hidden_size,
+                  filter_size,
+                  num_heads,
+                  torch.transpose(_gen_bias_mask(max_length), dim0=2, dim1=3),
+                  layer_dropout,
+                  attention_dropout,
+                  relu_dropout,
+                  True)
+
+        self.backward_attn_block = SelfAttentionBlock(*params)
+
+        self.linear = nn.Linear(hidden_size*2, hidden_size)
+
+    def forward(self, inputs):
+        x, list = inputs
+
+        # Forward Self-attention Block
+        encoder_outputs, weights = self.attn_block(x)
+        # Backward Self-attention Block
+        reverse_outputs, reverse_weights = self.backward_attn_block(x)
+        # Concatenation and Fully-connected Layer
+        outputs = torch.cat((encoder_outputs, reverse_outputs), dim=2)
+        y = self.linear(outputs)
+
+        # Attention weights for Visualization
+        self.weights_list = list
+        self.weights_list.append(weights)
+        self.weights_list.append(reverse_weights)
+        return y, self.weights_list
+
+class SelfAttentionBlock(nn.Module):
+    """
+    Self attention encoder block (Multi-head Attention + Positionwise Feedforward)
+    """
     def __init__(self, hidden_size, total_key_depth, total_value_depth, filter_size, num_heads,
                  bias_mask=None, layer_dropout=0.0, attention_dropout=0.0, relu_dropout=0.0, attention_map=False):
-        super(self_attention_block, self).__init__()
+        super(SelfAttentionBlock, self).__init__()
 
         self.attention_map = attention_map
         self.multi_head_attention = MultiHeadAttention(hidden_size, total_key_depth, total_value_depth,hidden_size, num_heads, bias_mask, attention_dropout, attention_map)
@@ -51,177 +178,9 @@ class self_attention_block(nn.Module):
             return y, weights
         return y
 
-class bi_directional_self_attention(nn.Module):
-    def __init__(self, hidden_size, total_key_depth, total_value_depth, filter_size, num_heads, max_length,
-                 layer_dropout=0.0, attention_dropout=0.0, relu_dropout=0.0):
-
-        super(bi_directional_self_attention, self).__init__()
-
-        self.weights_list = list()
-
-        params = (hidden_size,
-                  total_key_depth or hidden_size,
-                  total_value_depth or hidden_size,
-                  filter_size,
-                  num_heads,
-                  _gen_bias_mask(max_length),
-                  layer_dropout,
-                  attention_dropout,
-                  relu_dropout,
-                  True)
-
-        self.attn_block = self_attention_block(*params)
-
-        params = (hidden_size,
-                  total_key_depth or hidden_size,
-                  total_value_depth or hidden_size,
-                  filter_size,
-                  num_heads,
-                  torch.transpose(_gen_bias_mask(max_length), dim0=2, dim1=3),
-                  layer_dropout,
-                  attention_dropout,
-                  relu_dropout,
-                  True)
-
-        self.backward_attn_block = self_attention_block(*params)
-
-        self.linear = nn.Linear(hidden_size*2, hidden_size)
-
-    def forward(self, inputs):
-        x, list = inputs
-
-        # Forward Self-attention Block
-        encoder_outputs, weights = self.attn_block(x)
-        # Backward Self-attention Block
-        reverse_outputs, reverse_weights = self.backward_attn_block(x)
-        # Concatenation and Fully-connected Layer
-        outputs = torch.cat((encoder_outputs, reverse_outputs), dim=2)
-        y = self.linear(outputs)
-
-        # Attention weights for Visualization
-        self.weights_list = list
-        self.weights_list.append(weights)
-        self.weights_list.append(reverse_weights)
-        return y, self.weights_list
-
-class bi_directional_self_attention_layers(nn.Module):
-    def __init__(self, embedding_size, hidden_size, num_layers, num_heads, total_key_depth, total_value_depth,
-                 filter_size, max_length=100, input_dropout=0.0, layer_dropout=0.0,
-                 attention_dropout=0.0, relu_dropout=0.0):
-        super(bi_directional_self_attention_layers, self).__init__()
-
-        self.timing_signal = _gen_timing_signal(max_length, hidden_size)
-        params = (hidden_size,
-                  total_key_depth or hidden_size,
-                  total_value_depth or hidden_size,
-                  filter_size,
-                  num_heads,
-                  max_length,
-                  layer_dropout,
-                  attention_dropout,
-                  relu_dropout)
-        self.embedding_proj = nn.Linear(embedding_size, hidden_size, bias=False)
-        self.self_attn_layers = nn.Sequential(*[bi_directional_self_attention(*params) for l in range(num_layers)])
-        self.layer_norm = LayerNorm(hidden_size)
-        self.input_dropout = nn.Dropout(input_dropout)
-
-    def forward(self, inputs):
-        # Add input dropout
-        x = self.input_dropout(inputs)
-
-        # Project to hidden size
-        x = self.embedding_proj(x)
-
-        # Add timing signal
-        x += self.timing_signal[:, :inputs.shape[1], :].type_as(inputs.data)
-
-        # A Stack of Bi-directional Self-attention Layers
-        y, weights_list = self.self_attn_layers((x, []))
-
-        # Layer Normalization
-        y = self.layer_norm(y)
-        return y, weights_list
-
-class Model(nn.Module):
-    def __init__(self, config: Config, device):
-        super(Model, self).__init__()
-
-        self.timestep = config.data.preprocess.fragment_size
-        self.device = device
-
-        params = (config.train.model.input,
-                  config.train.model.hidden[0],
-                  config.train.model.layers,
-                  4, # num heads
-                  128, # total key depth
-                  128, # total value depth
-                  128, # filter size
-                  config.data.preprocess.fragment_size,
-                  config.train.model.dropout[0], # input dropout
-                  config.train.model.dropout[1], # layer dropout
-                  config.train.model.dropout[2], # attention dropout
-                  config.train.model.dropout[3]) # relu dropout
-
-        self.self_attn_layers = bi_directional_self_attention_layers(*params)
-        self.output_projection = nn.Linear(config.train.model.hidden[0], config.train.model.output)
-
-    def forward(self, x):
-        # labels = labels.view(-1, self.timestep)
-        # Output of Bi-directional Self-attention Layers
-        self_attn_output, weights_list = self.self_attn_layers(x)
-        logits = self.output_projection(self_attn_output)
-        return logits
-
-# Transformer modules
-
-def _gen_bias_mask(max_length):
-    """
-    Generates bias values (-Inf) to mask future timesteps during attention
-    """
-    np_mask = np.triu(np.full([max_length, max_length], -np.inf), 1)
-    torch_mask = torch.from_numpy(np_mask).to(torch.float32)
-    return torch_mask.unsqueeze(0).unsqueeze(1)
-
-def _gen_timing_signal(length, channels, min_timescale=1.0, max_timescale=1.0e4):
-    """
-    Generates a [1, length, channels] timing signal consisting of sinusoids
-    Adapted from:
-    https://github.com/tensorflow/tensor2tensor/blob/master/tensor2tensor/layers/common_attention.py
-    """
-    position = np.arange(length)
-    num_timescales = channels // 2
-    log_timescale_increment = (
-            math.log(float(max_timescale) / float(min_timescale)) /
-            (float(num_timescales) - 1))
-    inv_timescales = min_timescale * np.exp(
-        np.arange(num_timescales).astype(np.float32) * -log_timescale_increment)
-    scaled_time = np.expand_dims(position, 1) * np.expand_dims(inv_timescales, 0)
-
-    signal = np.concatenate([np.sin(scaled_time), np.cos(scaled_time)], axis=1)
-    signal = np.pad(signal, [[0, 0], [0, channels % 2]],
-                    'constant', constant_values=[0.0, 0.0])
-    signal = signal.reshape([1, length, channels])
-
-    return torch.from_numpy(signal).to(torch.float32)
-
-class LayerNorm(nn.Module):
-    # Borrowed from jekbradbury
-    # https://github.com/pytorch/pytorch/issues/1959
-    def __init__(self, features, eps=1e-6):
-        super(LayerNorm, self).__init__()
-        self.gamma = nn.Parameter(torch.ones(features))
-        self.beta = nn.Parameter(torch.zeros(features))
-        self.eps = eps
-
-    def forward(self, x):
-        mean = x.mean(-1, keepdim=True)
-        std = x.std(-1, keepdim=True)
-        return self.gamma * (x - mean) / (std + self.eps) + self.beta
-
 class MultiHeadAttention(nn.Module):
     """
-    Multi-head attention as per https://arxiv.org/pdf/1706.03762.pdf
-    Refer Figure 2
+    Multi-head attention block
     """
 
     def __init__(self, input_depth, total_key_depth, total_value_depth, output_depth,
@@ -237,8 +196,6 @@ class MultiHeadAttention(nn.Module):
             dropout: Dropout probability (Should be non-zero only during training)
         """
         super(MultiHeadAttention, self).__init__()
-        # Checks borrowed from
-        # https://github.com/tensorflow/tensor2tensor/blob/master/tensor2tensor/layers/common_attention.py
         if total_key_depth % num_heads != 0:
             raise ValueError("Key depth (%d) must be divisible by the number of "
                              "attention heads (%d)." % (total_key_depth, num_heads))
@@ -329,11 +286,45 @@ class MultiHeadAttention(nn.Module):
 
         return outputs
 
+# Util methods
+def _gen_bias_mask(max_length):
+    """
+    Generates bias values (-Inf) to mask future timesteps during attention
 
+    :returns: torch.Tensor[1,1, max_length, max_length]
+    """
+    np_mask = np.triu(np.full([max_length, max_length], -np.inf), 1)
+    torch_mask = torch.from_numpy(np_mask).to(torch.float32)
+    return torch_mask.unsqueeze(0).unsqueeze(1)
+
+def _gen_timing_signal(length, channels, min_timescale=1.0, max_timescale=1.0e4):
+    """
+    Generates positional encodings via sinusoids.
+     
+    :returns:   torch.Tensor[1, length, channels]
+    """
+    position = np.arange(length)
+    num_timescales = channels // 2
+    log_timescale_increment = (
+            math.log(float(max_timescale) / float(min_timescale)) /
+            (float(num_timescales) - 1))
+    inv_timescales = min_timescale * np.exp(
+        np.arange(num_timescales).astype(np.float32) * -log_timescale_increment)
+    scaled_time = np.expand_dims(position, 1) * np.expand_dims(inv_timescales, 0)
+
+    signal = np.concatenate([np.sin(scaled_time), np.cos(scaled_time)], axis=1)
+    signal = np.pad(signal, [[0, 0], [0, channels % 2]],
+                    'constant', constant_values=[0.0, 0.0])
+    signal = signal.reshape([1, length, channels])
+
+    return torch.from_numpy(signal).to(torch.float32)
+
+# Basic building blocks
 class Conv(nn.Module):
     """
-    Convenience class that does padding and convolution for inputs in the format
-    [batch_size, sequence length, hidden size]
+    Convolution block with custom padding
+
+    :returns: torch.Tensor[batch_size, sequence length, hidden size]
     """
 
     def __init__(self, input_size, output_size, kernel_size, pad_type):
@@ -359,7 +350,7 @@ class Conv(nn.Module):
 
 class PositionwiseFeedForward(nn.Module):
     """
-    Does a Linear + RELU + Linear on each of the timesteps
+    Multilayer block that applies a sequence of layers (specifically selected) interspersed with a ReLU on each of the timesteps.
     """
 
     def __init__(self, input_depth, filter_size, output_depth, layer_config='ll', padding='left', dropout=0.0):
@@ -402,3 +393,19 @@ class PositionwiseFeedForward(nn.Module):
                 x = self.dropout(x)
 
         return x
+    
+
+class LayerNorm(nn.Module):
+    """
+    Normalization block accross the last dimension with added scaling and shift
+    """
+    def __init__(self, features, eps=1e-6):
+        super(LayerNorm, self).__init__()
+        self.gamma = nn.Parameter(torch.ones(features))
+        self.beta = nn.Parameter(torch.zeros(features))
+        self.eps = eps
+
+    def forward(self, x):
+        mean = x.mean(-1, keepdim=True)
+        std = x.std(-1, keepdim=True)
+        return self.gamma * (x - mean) / (std + self.eps) + self.beta
