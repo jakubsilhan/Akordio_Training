@@ -8,10 +8,12 @@ from tqdm import tqdm
 from core.net_config import Config, load_config
 from core.song_dataset import SongDataset, make_collate_fn
 from torch.utils.data import DataLoader
+from torch.nn.utils.rnn import pad_sequence
 from Neural_Nets.CR1 import Model as CR1
 from Neural_Nets.SimpleLSTM import Model as SimpleLSTM
 from Neural_Nets.BTC import Model as BTC
 from core.chords import Chords, Complexity
+from TorchCRF import CRF
 
 def accuracy_fn(y_real, y_pred, padding_index):
     # Flatten inputs 
@@ -26,18 +28,15 @@ def accuracy_fn(y_real, y_pred, padding_index):
     acc = (correct / total) * 100 if total > 0 else 0.0
     return acc
 
-def compute_mean_std(dataset):
-    # Concatenate all tensors
-    all_data = torch.cat([X for X, _ in dataset], dim=0)  # shape: (total_frames, feature_dim)
-    mean = all_data.mean().item()
-    std = all_data.std().item()
-    return mean, std
-
 def train(config: Config):
+    """
+    Training for a CRF model
+
+    Uses the same configuration as the used recognition model.
+    """
+
     # Initialization
     model_folder = os.path.join(config.train.model_path, config.train.model_name, str(config.train.test_fold))
-    os.makedirs(model_folder, exist_ok=True)
-    shutil.copy2("config.yaml", model_folder)
 
     match config.train.model_complexity:
         case "complex":
@@ -107,76 +106,53 @@ def train(config: Config):
     test_dataloader = DataLoader(test_dataset, batch_size=config.train.model.batch_size, shuffle=False, collate_fn=make_collate_fn(config.train.model.padding_index))
 
     # Model
+    # TODO Add Transformer, CR2 and a PCP RNN
     match config.train.model_type:
         case "SimpleLSTM":
-            shutil.copy2("Neural_Nets/SimpleLSTM.py", model_folder+"/Model.py")
-            model = SimpleLSTM(
+            pre_model = SimpleLSTM(
                 config=config,
                 device=device
             ).to(device)
         case "BTC":
-            shutil.copy2("Neural_Nets/BTC.py", model_folder+"/Model.py")
-            model = BTC(
+            pre_model = BTC(
                 config=config, 
                 device=device
             ).to(device)
         case default:
-            shutil.copy2("Neural_Nets/CR1.py", model_folder+"/Model.py")
-            model = CR1(
+            pre_model = CR1(
                 config=config,
                 device=device
             ).to(device)
+    
+    # Load pre-model
+    pre_model.to(device)
+    model_path = os.path.join(model_folder, "final_model.pt")
+    loaded = torch.load(model_path, map_location=device)
+    pre_model.load_state_dict(loaded['model'])
+    normalization = loaded['normalization']
 
-    # Loss and optimizer
-    model.to(device)
-    loss_fn = nn.CrossEntropyLoss(ignore_index=config.train.model.padding_index)
-    optimizer = optim.Adam(model.parameters(), lr=config.train.model.learning_rate, weight_decay=config.train.model.weight_decay)
-    scheduler = optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=config.train.model.scheduler_step, gamma=config.train.model.scheduler_gamma)
+    pre_model.eval()
+    for p in pre_model.parameters():
+        p.requires_grad = False
 
-    # data info
-    train_mean, train_std = compute_mean_std(train_dataset)
+    # Initialize CRF
+    crf = CRF(num_labels=config.train.model.output).to(device)
+    optimizer = optim.Adam(crf.parameters(), lr=config.train.model.learning_rate) # TODO look into a separate learning rate for CRF
 
     # Training loop
     torch.manual_seed(config.base.random_seed)
 
     ## Initialization
-    start_epoch = 0
-    epoch = start_epoch
-    train_loss_list, train_accuracy_list, test_loss_list, test_accuracy_list = [], [], [], []
+    train_loss_list = []
+    train_accuracy_list = []
 
-    # Check and load pretrained (trains additional epoch_count)
-    final_model_path = os.path.join(model_folder, "final_model.pt")
-    if os.path.exists(final_model_path):
-            # Load model and optimizer
-            model_path = os.path.join(model_folder, "final_model.pt")
-            loaded: dict = torch.load(model_path, map_location=device)
-            model.load_state_dict(loaded['model'])
-            optimizer.load_state_dict(loaded['optimizer'])
+    test_loss_list = []
+    test_accuracy_list = []
 
-            # Load epoch and loss details
-            start_epoch = loaded.get('epoch', 0) + 1
-            prev_losses: dict = loaded.get('loss', {})
+    pbar = tqdm(range(30), desc="Training Progress") # TODO add proper epoch crf count
 
-            train_loss_list = prev_losses.get('train_losses', [])
-            train_accuracy_list = prev_losses.get('train_accuracies', [])
-            test_loss_list = prev_losses.get('test_losses', [])
-            test_accuracy_list = prev_losses.get('test_accuracies', [])
-
-            # Load normalization
-            normalization:dict = loaded.get('normalization', {})
-            train_mean = normalization.get('mean', train_mean)
-            train_std = normalization.get('std', train_std)
-
-            # Rename loaded dict to checkpoint
-            checkpoint_name = f"checkpoint_epoch_{start_epoch-1}.pt"
-            checkpoint_path = os.path.join(model_folder, checkpoint_name)
-            shutil.move(model_path, checkpoint_path)
-
-
-    pbar = tqdm(range(start_epoch, start_epoch + config.train.model.epoch_count), desc="Training Progress")
     ## Pipeline
     for epoch in pbar:
-        model.train()
 
         ### Initializations
         train_losses = []
@@ -189,10 +165,11 @@ def train(config: Config):
             ####Move to device (GPU or CPU)
             X_batch = X_batch.to(device)
             y_batch = y_batch.to(device)
+            mask = (y_batch != config.train.model.padding_index).to(device)
 
             #### Normalization
             ##### Per Dataset
-            X_batch = (X_batch-train_mean)/train_std
+            X_batch = (X_batch-normalization['mean'])/normalization['std']
             targets = y_batch
 
             ##### Per tensor
@@ -200,15 +177,20 @@ def train(config: Config):
             #     X_batch = X_batch / (X_batch.sum(dim=-1, keepdim=True) + 1e-8) # Normalize to sum = 1 for pcp
 
             #### 1. Forward pass
-            logits = model(X_batch)
-            preds = torch.softmax(logits, dim=2).argmax(dim=2)
+            with torch.inference_mode():
+                logits = pre_model(X_batch)
+
+            preds = crf.viterbi_decode(logits, mask)
+
+            # Convert to tensor and pad
+            preds_tensor = [torch.tensor(p, device=device) for p in preds]
+            preds_padded = pad_sequence(preds_tensor, batch_first=True, padding_value=config.train.model.padding_index)
 
             #### 2. Loss and accuracy
-            flat_logits = logits.view(-1, logits.size(-1))
-            flat_targets = targets.view(-1)
+            log_likelihood = crf(logits, y_batch, mask)
+            loss = -log_likelihood.mean()
 
-            loss = loss_fn(flat_logits, flat_targets)
-            acc = accuracy_fn(targets, preds, config.train.model.padding_index)
+            acc = accuracy_fn(targets, preds_padded, config.train.model.padding_index)
 
             train_losses.append(loss.cpu().item())
             train_accuracies.append(acc)
@@ -222,32 +204,36 @@ def train(config: Config):
             #### 5. Optimizer step
             optimizer.step()
 
-        scheduler.step()
 
         ### Test
         for X_batch, y_batch in test_dataloader:
             #### Move to device (GPU or CPU)
             X_batch = X_batch.to(device)
             y_batch = y_batch.to(device)
+            mask = (y_batch != config.train.model.padding_index).to(device)
 
             #### Normalization
-            X_batch = (X_batch-train_mean)/train_std
+            X_batch = (X_batch-normalization['mean'])/normalization['std']
             targets = y_batch
 
+            #### 1. Forward pass
             with torch.inference_mode():
-                #### 1. Forward pass
-                logits = model(X_batch)
-                preds = torch.softmax(logits, dim=2).argmax(dim=2)
+                logits = pre_model(X_batch)
 
                 #### 2. Loss and accuracy
-                flat_logits = logits.view(-1, logits.size(-1))
-                flat_targets = targets.view(-1)
+                log_likelihood = crf(logits, y_batch, mask)
+                loss = -log_likelihood.mean()
 
-                loss = loss_fn(flat_logits, flat_targets)
-                acc = accuracy_fn(targets, preds, config.train.model.padding_index)
+            preds = crf.viterbi_decode(logits, mask)
 
-                test_losses.append(loss.cpu().item())
-                test_accuracies.append(acc)
+            # Convert to tensor and pad
+            preds_tensor = [torch.tensor(p, device=device) for p in preds]
+            preds_padded = pad_sequence(preds_tensor, batch_first=True, padding_value=config.train.model.padding_index)
+
+            acc = accuracy_fn(targets, preds_padded, config.train.model.padding_index)
+
+            test_losses.append(loss.cpu().item())
+            test_accuracies.append(acc)
 
         ### Checkpointing
         if (epoch + 1) % config.train.checkpoint_interval == 0:
@@ -257,12 +243,8 @@ def train(config: Config):
                 'test_losses': test_loss_list,
                 'test_accuracies': test_accuracy_list
             }
-            normalization = {
-                'mean': train_mean,
-                'std': train_std
-            }
-            checkpoint_path = os.path.join(model_folder, f"checkpoint_epoch_{epoch+1}.pt")
-            checkpoint_dict={'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch, 'loss': losses, 'normalization': normalization}
+            checkpoint_path = os.path.join(model_folder, f"crf_checkpoint_epoch_{epoch+1}.pt")
+            checkpoint_dict={'model': crf.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch, 'loss': losses}
             torch.save(checkpoint_dict, checkpoint_path)
 
         ### Characteristics
@@ -284,14 +266,10 @@ def train(config: Config):
         'test_losses': test_loss_list,
         'test_accuracies': test_accuracy_list
     }
-    normalization = {
-                'mean': train_mean,
-                'std': train_std
-    }
 
     # Save model
-    model_path = os.path.join(model_folder, "final_model.pt")
-    state_dict={'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch, 'loss': losses, 'normalization': normalization}
+    model_path = os.path.join(model_folder, "final_crf_model.pt")
+    state_dict={'model': crf.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch, 'loss': losses}
     torch.save(state_dict, model_path)
 
     # Plot Loss
@@ -312,7 +290,7 @@ def train(config: Config):
     plt.ylabel("Accuracy (%)")
     plt.title("Accuracy Curve")
     plt.legend()
-    figure_path = os.path.join(model_folder, "learning_curve.png")
+    figure_path = os.path.join(model_folder, "crf_learning_curve.png")
     plt.savefig(figure_path)
     plt.show()
 

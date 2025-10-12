@@ -3,35 +3,35 @@ base:
 data:
   dataset_dir: "D:/Development/Source/University/Diploma/chord-recognition/Training Framework/Datasets"
   datasets: [Beatles, Uspop2000, CaroleKing, Queen]
-  preprocessed_dir: "D:/Development/Source/University/Diploma/chord-recognition/Training Framework/Data/BaseDataset"
+  preprocessed_dir: "D:/Development/Source/University/Diploma/chord-recognition/Training Framework/Data/DetailedDataset"
   preprocess:
     pcp:
       enabled: False # whether to use pcp or log CQT
       bins: 12 # frequency resolution of CQT (bin for each semitone)
       octaves: 6 # number of octaves (separately specified for chroma)
     num_splits: 5 # number of k-fold folds
-    bins_per_octave: 24 # frequency resolution of CQT
-    cqt_bins: 144 # number of total bins that specifies number of octaves (144/24=6) or (216/32=6)
+    bins_per_octave: 36 # frequency resolution of CQT
+    cqt_bins: 216 # number of total bins that specifies number of octaves (144/24=6) or (216/32=6)
     hop_length: 2048 # number of samples between consecutive analysis frames (frame_length scales with frequency -> lower f means larger window)
     fragment_size: 108 # number of frames per fragment ((2048/22050)*108=10.03s) - 0 for full songs
     pitch_shift_start: -6 # lowest pitch shift
     pitch_shift_end: 5 # highest pitch shift
     sampling_rate: 22050 # sampling rate
 train: # used for both training a evaluating
-  data_source: "D:/Development/Source/University/Diploma/chord-recognition/Training Framework/Data/BaseDataset"
+  data_source: "D:/Development/Source/University/Diploma/chord-recognition/Training Framework/Data/DetailedDataset"
   model_path: "D:/Development/Source/University/Diploma/chord-recognition/Training Framework/Models"
-  model_name: "btc_144__majmin"
+  model_name: "cr1_216_majmin"
   test_fold: 2 # which fold to use as test set
-  model_type: "BTC" # CR1/SimpleLSTM/BTC...
+  model_type: "CR1" # CR1/SimpleLSTM/...
   model_complexity: "majmin" # which type of chords to train (majmin/majmin7/complex)
   checkpoint_interval: 10
   model:
     batch_size: 128
-    input: 144 # feature size
+    input: 216 # feature size
     output: 25 # output size (number of chords 25/61/170)
     hidden: [128] # hidden size (depends on a model)
-    dropout: [0.2, 0.2, 0.2, 0.2] # dropout (depends on a model)
-    layers: 8 # number of layers
+    dropout: [0.4, 0, 0] # dropout (depends on a model)
+    layers: 2 # number of layers
     bidirectional: True
     padding_index: -1
     epoch_count: 100
