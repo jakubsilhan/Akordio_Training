@@ -117,7 +117,6 @@ class Preprocessor():
             features = np.log(np.abs(cqt) + 1e-6)
     
         features = features.T
-        # Look into n_fft parameter to work with the windowing effect
         times = librosa.frames_to_time(np.arange(features.shape[0]), sr=self.config.data.preprocess.sampling_rate, hop_length=self.config.data.preprocess.hop_length)
 
         return features, times
@@ -258,6 +257,37 @@ class Preprocessor():
         
         return np.array(labels)
     
+    # def assign_labels_to_times(self, times: np.ndarray, intervals: list[tuple[float, float, str]]) -> np.ndarray:
+    #     '''
+    #     Creates an array of chords alligned to cqt frames
+    #     '''
+    #     # Initializations
+    #     hop_length = self.config.data.preprocess.hop_length
+    #     sr = self.config.data.preprocess.sampling_rate
+    #     frame_step = hop_length / sr
+
+    #     labels = []
+
+    #     # Cycles for each frame time
+    #     for t in times:
+    #         frame_start = t - frame_step / 2
+    #         frame_end = t + frame_step / 2
+
+    #         best_overlap = 0.0
+    #         best_label = "N"
+
+    #         # Looks for biggest overlap for intervals
+    #         for start, end, chord in intervals:
+    #             overlap = max(0.0, min(end, frame_end) - max(start, frame_start))
+    #             if overlap > best_overlap:
+    #                 best_overlap = overlap
+    #                 best_label = chord
+
+    #         labels.append(best_label)
+
+    #     return np.array(labels)
+
+
     def normalize_note(self, note: str) -> str:
         '''
         Normalizes flats
