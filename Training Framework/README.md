@@ -1,6 +1,19 @@
 # chord-recognition
 A repo for chord recognition
 
+## Requirements
+### Pyrubberband
+The preprocessing pipeline utilizes the Rubber Band program to do data augmentation via pitch shifting. The pyrubberband python wrapper is used to control it from python, but the instalation is required to be done manually for Rubber Band. Here are the steps how to install said program on Windows.
+
+1. Download zipped executable from https://breakfastquay.com/rubberband/
+2. Extract files from archive to C:\Program Files\RubberBand
+3. Add the folder to PATH in __Control Panel → System → Advanced system settings → Environment Variables__
+4. Test installation by using `rubberband --help`
+5. Install python package `pip install pyrubberband`
+
+### Pytorch
+
+
 ## Configuration
 This is what the configuration file, that controls the whole training process, looks like.
 ```

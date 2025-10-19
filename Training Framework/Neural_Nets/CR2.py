@@ -27,6 +27,8 @@ class Model(nn.Module):
         # Recurrent layers
         self.gru = nn.GRU(input_size=36, hidden_size=self.hidden_size, num_layers=self.num_layers, batch_first=True, bidirectional=self.bidirectional)
 
+        self.decoder_gru = nn.GRU(input=self.hidden_size*self.num_directions, hidden_size=self.hidden_size, num_layers=self.num_layers, batch_first=True, bidirectional=self.bidirectional)
+
         # Output
         self.fc = nn.Linear(self.hidden_size*self.num_directions, self.output_features)
 
@@ -41,5 +43,6 @@ class Model(nn.Module):
 
         h0 = torch.zeros(self.num_layers * self.num_directions, conv.size(0), self.hidden_size).to(self.device)
         gru, h = self.gru(conv, h0)
+        gru, _ = self.gru(gru)
         logits = self.fc(gru)
         return logits

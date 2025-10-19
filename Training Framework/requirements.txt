@@ -1,1 +1,11 @@
 TorchCRF
+pyrubberband
+librosa
+numpy
+matplotlib
+torch
+tqdm
+mir-eval
+pydantic
+pandas
+scikit-learn

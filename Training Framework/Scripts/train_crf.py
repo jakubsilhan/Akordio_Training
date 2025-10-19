@@ -1,7 +1,5 @@
-import os, torch, shutil
-import pandas as pd
+import os, torch
 import numpy as np
-import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
 from tqdm import tqdm

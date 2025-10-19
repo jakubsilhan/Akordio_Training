@@ -13,6 +13,7 @@ class PreprocessingConfig(BaseModel):
     cqt_bins: int
     hop_length: int
     fragment_size: int
+    fragment_hop: float
     pitch_shift_start: int
     pitch_shift_end: int
     sampling_rate: int

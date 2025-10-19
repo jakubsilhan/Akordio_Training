@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+import pyrubberband as pyrb
 import os, librosa, shutil, io, torch
 from sklearn.model_selection import KFold
 from .net_config import Config, load_config
@@ -51,7 +52,11 @@ class Preprocessor():
         intervals = self.load_annotation(path, filename)
         shifts = range(self.config.data.preprocess.pitch_shift_start, self.config.data.preprocess.pitch_shift_end+1)
         for shift_factor in shifts:
-            y_shifted = librosa.effects.pitch_shift(y, sr=sr, n_steps=shift_factor, bins_per_octave=12) # semitone shift -> 12 bins per octave
+            # y_shifted = librosa.effects.pitch_shift(y, sr=sr, n_steps=shift_factor, bins_per_octave=12) # semitone shift -> 12 bins per octave
+            if shift_factor != 0:
+                y_shifted = pyrb.pitch_shift(y, sr=sr, n_steps=shift_factor)
+            else:
+                y_shifted = y
             features, times = self.process_features(y_shifted)
             intervals_shifted = self.shift_annotation(intervals, shift_factor)
             labels = self.assign_labels_to_times(times, intervals_shifted)
@@ -89,8 +94,12 @@ class Preprocessor():
             return fragments
         
         # Fragment
-        for start in range(0, len(features), fragment_size):
+        hop_size = int(self.config.data.preprocess.fragment_size * self.config.data.preprocess.fragment_hop)
+        for start in range(0, len(features), hop_size):
             fragment = features[start:start+fragment_size]
+            if len(fragment) < fragment_size:
+                pad_width = fragment_size - len(fragment)
+                fragment = np.pad(fragment, ((0, pad_width), (0, 0)), mode='constant')
             fragments.append(torch.tensor(fragment, dtype=torch.float32))
         
         return fragments
@@ -101,13 +110,14 @@ class Preprocessor():
         '''
         if self.config.data.preprocess.pcp.enabled:
             features = librosa.feature.chroma_cqt(y=y, sr=self.config.data.preprocess.sampling_rate, bins_per_octave=self.config.data.preprocess.bins_per_octave, hop_length=self.config.data.preprocess.hop_length, n_chroma=self.config.data.preprocess.pcp.bins, n_octaves=self.config.data.preprocess.pcp.octaves)
-            # TODO consider normalization in PCP
-            # features = librosa.util.normalize(features, axis=0)
         else:
-            features = np.abs(librosa.cqt(y, sr=self.config.data.preprocess.sampling_rate, bins_per_octave=self.config.data.preprocess.bins_per_octave,n_bins=self.config.data.preprocess.cqt_bins, hop_length=self.config.data.preprocess.hop_length))
-            features = librosa.amplitude_to_db(features, ref=np.max)
+            cqt = np.abs(librosa.cqt(y, sr=self.config.data.preprocess.sampling_rate, bins_per_octave=self.config.data.preprocess.bins_per_octave,n_bins=self.config.data.preprocess.cqt_bins, hop_length=self.config.data.preprocess.hop_length))
+            # features = librosa.amplitude_to_db(cqt, ref=np.max)
+            # features = librosa.power_to_db(cqt**2, ref=np.max)
+            features = np.log(np.abs(cqt) + 1e-6)
     
         features = features.T
+        # Look into n_fft parameter to work with the windowing effect
         times = librosa.frames_to_time(np.arange(features.shape[0]), sr=self.config.data.preprocess.sampling_rate, hop_length=self.config.data.preprocess.hop_length)
 
         return features, times
@@ -202,21 +212,31 @@ class Preprocessor():
 
         # Fragmenting mode
         num_rows = len(song_df)
-        num_fragments = num_rows // self.config.data.preprocess.fragment_size
-        for i in range(num_fragments):
-            fragment = song_df.iloc[i * self.config.data.preprocess.fragment_size : (i + 1) * self.config.data.preprocess.fragment_size]
+        hop_size = int(self.config.data.preprocess.fragment_size * self.config.data.preprocess.fragment_hop)
+        for start in range(0, num_rows, hop_size):
+            fragment = song_df.iloc[start:start + self.config.data.preprocess.fragment_size]
 
-            # Extract into numpy arrays
-            timestamps = fragment.iloc[:, 0].values.astype(np.float32)
-            X = fragment.iloc[:, 1:1 + input_dim].values.astype(np.float32)
-            y = fragment["chord"].values.astype(str)
+            # If fragment is shorter than desired, pad with zeros for features, "N" for chords
+            if len(fragment) < self.config.data.preprocess.fragment_size:
+                pad_len = self.config.data.preprocess.fragment_size - len(fragment)
+                pad_features = np.zeros((pad_len, input_dim), dtype=np.float32)
+                pad_chords = np.array(["N"] * pad_len)
+                fragment_features = fragment.iloc[:, 1:1 + input_dim].values.astype(np.float32)
+                fragment_chords = fragment["chord"].values.astype(str)
+                X = np.vstack([fragment_features, pad_features])
+                y = np.hstack([fragment_chords, pad_chords])
+                timestamps = np.concatenate([fragment.iloc[:, 0].values.astype(np.float32), np.zeros(pad_len, dtype=np.float32)])
+            else:
+                X = fragment.iloc[:, 1:1 + input_dim].values.astype(np.float32)
+                y = fragment["chord"].values.astype(str)
+                timestamps = fragment.iloc[:, 0].values.astype(np.float32)
 
-            # Prepare pathing
-            frag_filename = f"{base_name}_shift{shift_factor:02d}_frag{i:03d}.npz"
-            frag_path = os.path.join(self.config.data.preprocessed_dir, str(fold),frag_filename)
+            # Prepare path
+            frag_filename = f"{base_name}_shift{shift_factor:02d}_frag{start//hop_size:04d}.npz"
+            frag_path = os.path.join(self.config.data.preprocessed_dir, str(fold), frag_filename)
             os.makedirs(os.path.dirname(frag_path), exist_ok=True)
 
-            # Save into npz
+            # Save fragment
             np.savez_compressed(frag_path, timestamps=timestamps, X=X, y=y)
 
 
@@ -229,7 +249,7 @@ class Preprocessor():
         for t in times:
             found = False
             for start, end, chord in intervals:
-                if start < t and t < end:
+                if start <= t and t < end:
                     labels.append(chord)
                     found = True
                     break
