@@ -24,7 +24,7 @@ train: # used for both training a evaluating
   model_name: "cr1_144_majmin7"
   test_fold: 3 # which fold to use as test set
   model_type: "CR1" # CR1/SimpleLSTM/BTC...
-  model_complexity: "complex" # which type of chords to train (majmin/majmin7/complex)
+  model_complexity: "majmin7" # which type of chords to train (majmin/majmin7/complex)
   checkpoint_interval: 10
   model:
     batch_size: 128

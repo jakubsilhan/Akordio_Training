@@ -43,7 +43,7 @@ def train(config: Config):
             complexity = Complexity.COMPLEX
         case "majmin7":
             complexity = Complexity.MAJMIN7
-        case default:
+        case _:
             complexity = Complexity.MAJMIN
 
     chord_tool = Chords()
@@ -123,7 +123,7 @@ def train(config: Config):
                 config=config, 
                 device=device
             ).to(device)
-        case default:
+        case _:
             shutil.copy2("Neural_Nets/CR1.py", model_folder+"/Model.py")
             model = CR1(
                 config=config,

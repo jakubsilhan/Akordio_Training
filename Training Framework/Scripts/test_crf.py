@@ -31,7 +31,7 @@ def test(config: Config):
             complexity = Complexity.COMPLEX
         case "majmin7":
             complexity = Complexity.MAJMIN7
-        case default:
+        case _:
             complexity = Complexity.MAJMIN
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -70,7 +70,7 @@ def test(config: Config):
                 config=config,
                 device=device
             ).to(device)
-        case default:
+        case _:
             pre_model = CR1(
                 config=config,
                 device=device
