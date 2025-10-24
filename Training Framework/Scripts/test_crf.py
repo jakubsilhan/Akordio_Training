@@ -42,6 +42,10 @@ def test(config: Config):
     for fragment in tqdm(os.listdir(test_fold_path), desc="Loading test fold"):
         if not fragment.endswith(".npz"):
             continue
+
+        if "_shift00_" not in fragment:
+            continue
+
         fragment_path = os.path.join(test_fold_path, fragment)
         data = np.load(fragment_path)
         song_name = fragment.split("frag")[0]
@@ -88,7 +92,7 @@ def test(config: Config):
 
     evals = []
 
-    test_dataset = SongDataset(fragments)
+    test_dataset = SongDataset(fragments, config)
     test_dataloader = DataLoader(test_dataset, batch_size=8, shuffle=False, collate_fn=make_collate_fn(config.train.model.padding_index))
 
     # Initializations

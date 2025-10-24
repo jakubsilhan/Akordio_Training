@@ -85,6 +85,10 @@ def train(config: Config):
     for fragment in tqdm(os.listdir(test_fold_path), desc="Loading test fold"):
         if not fragment.endswith(".npz"):
             continue
+
+        if "_shift00_" not in fragment:
+            continue
+
         fragment_path = os.path.join(test_fold_path, fragment)
         data = np.load(fragment_path)
         X = data["X"]
@@ -98,8 +102,8 @@ def train(config: Config):
         test_tensors.append((X_tensor, y_tensor))
 
     # Dataset
-    train_dataset = SongDataset(train_tensors)
-    test_dataset = SongDataset(test_tensors)
+    train_dataset = SongDataset(train_tensors, config)
+    test_dataset = SongDataset(test_tensors, config)
     train_dataloader = DataLoader(train_dataset, batch_size=config.train.model.batch_size,shuffle=True, collate_fn=make_collate_fn(config.train.model.padding_index))
     test_dataloader = DataLoader(test_dataset, batch_size=config.train.model.batch_size, shuffle=False, collate_fn=make_collate_fn(config.train.model.padding_index))
 

@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import warnings
 from tqdm import tqdm
 import pyrubberband as pyrb
 import os, librosa, shutil, io, torch
@@ -90,7 +91,7 @@ class Preprocessor():
 
         # Return with no fragmenting
         if fragment_size == 0:
-            fragments.append(torch.tensor(features, dtype=torch.float32))
+            fragments.append(torch.tensor(features, dtype=torch.float64))
             return fragments
         
         # Fragment
@@ -100,7 +101,7 @@ class Preprocessor():
             if len(fragment) < fragment_size:
                 pad_width = fragment_size - len(fragment)
                 fragment = np.pad(fragment, ((0, pad_width), (0, 0)), mode='constant')
-            fragments.append(torch.tensor(fragment, dtype=torch.float32))
+            fragments.append(torch.tensor(fragment, dtype=torch.float64))
         
         return fragments
 
@@ -114,7 +115,8 @@ class Preprocessor():
             cqt = np.abs(librosa.cqt(y, sr=self.config.data.preprocess.sampling_rate, bins_per_octave=self.config.data.preprocess.bins_per_octave,n_bins=self.config.data.preprocess.cqt_bins, hop_length=self.config.data.preprocess.hop_length))
             # features = librosa.amplitude_to_db(cqt, ref=np.max)
             # features = librosa.power_to_db(cqt**2, ref=np.max)
-            features = np.log(np.abs(cqt) + 1e-6)
+            # features = np.log(cqt + 1e-6)
+            features = cqt
     
         features = features.T
         times = librosa.frames_to_time(np.arange(features.shape[0]), sr=self.config.data.preprocess.sampling_rate, hop_length=self.config.data.preprocess.hop_length)
@@ -196,8 +198,8 @@ class Preprocessor():
         # Full song mode
         if self.config.data.preprocess.fragment_size <= 0:
             # Extract into numpy arrays
-            timestamps = song_df.iloc[:, 0].values.astype(np.float32)
-            X = song_df.iloc[:, 1:1 + input_dim].values.astype(np.float32) # skip timestamp
+            timestamps = song_df.iloc[:, 0].values.astype(np.float64)
+            X = song_df.iloc[:, 1:1 + input_dim].values.astype(np.float64) # skip timestamp
             y = song_df["chord"].values.astype(str)
 
             # Prepare pathing
@@ -216,19 +218,22 @@ class Preprocessor():
             fragment = song_df.iloc[start:start + self.config.data.preprocess.fragment_size]
 
             # If fragment is shorter than desired, pad with zeros for features, "N" for chords
+            # if len(fragment) < self.config.data.preprocess.fragment_size:
+            #     pad_len = self.config.data.preprocess.fragment_size - len(fragment)
+            #     pad_features = np.zeros((pad_len, input_dim), dtype=np.float32)
+            #     pad_chords = np.array(["N"] * pad_len)
+            #     fragment_features = fragment.iloc[:, 1:1 + input_dim].values.astype(np.float32)
+            #     fragment_chords = fragment["chord"].values.astype(str)
+            #     X = np.vstack([fragment_features, pad_features])
+            #     y = np.hstack([fragment_chords, pad_chords])
+            #     timestamps = np.concatenate([fragment.iloc[:, 0].values.astype(np.float32), np.zeros(pad_len, dtype=np.float32)])
+            # else:
             if len(fragment) < self.config.data.preprocess.fragment_size:
-                pad_len = self.config.data.preprocess.fragment_size - len(fragment)
-                pad_features = np.zeros((pad_len, input_dim), dtype=np.float32)
-                pad_chords = np.array(["N"] * pad_len)
-                fragment_features = fragment.iloc[:, 1:1 + input_dim].values.astype(np.float32)
-                fragment_chords = fragment["chord"].values.astype(str)
-                X = np.vstack([fragment_features, pad_features])
-                y = np.hstack([fragment_chords, pad_chords])
-                timestamps = np.concatenate([fragment.iloc[:, 0].values.astype(np.float32), np.zeros(pad_len, dtype=np.float32)])
-            else:
-                X = fragment.iloc[:, 1:1 + input_dim].values.astype(np.float32)
-                y = fragment["chord"].values.astype(str)
-                timestamps = fragment.iloc[:, 0].values.astype(np.float32)
+                continue
+
+            X = fragment.iloc[:, 1:1 + input_dim].values.astype(np.float64)
+            y = fragment["chord"].values.astype(str)
+            timestamps = fragment.iloc[:, 0].values.astype(np.float64)
 
             # Prepare path
             frag_filename = f"{base_name}_shift{shift_factor:02d}_frag{start//hop_size:04d}.npz"
@@ -259,32 +264,28 @@ class Preprocessor():
     
     # def assign_labels_to_times(self, times: np.ndarray, intervals: list[tuple[float, float, str]]) -> np.ndarray:
     #     '''
-    #     Creates an array of chords alligned to cqt frames
+    #     Creates an array of chords aligned to CQT frames.
     #     '''
-    #     # Initializations
     #     hop_length = self.config.data.preprocess.hop_length
     #     sr = self.config.data.preprocess.sampling_rate
-    #     frame_step = hop_length / sr
-
+    #     time_interval = hop_length / sr
+        
     #     labels = []
-
-    #     # Cycles for each frame time
+        
     #     for t in times:
-    #         frame_start = t - frame_step / 2
-    #         frame_end = t + frame_step / 2
-
+    #         frame_end = t + time_interval
     #         best_overlap = 0.0
     #         best_label = "N"
-
-    #         # Looks for biggest overlap for intervals
+            
+    #         # Find chord with maximum overlap
     #         for start, end, chord in intervals:
-    #             overlap = max(0.0, min(end, frame_end) - max(start, frame_start))
+    #             overlap = max(0.0, min(end, frame_end) - max(start, t))
     #             if overlap > best_overlap:
     #                 best_overlap = overlap
     #                 best_label = chord
-
+            
     #         labels.append(best_label)
-
+    
     #     return np.array(labels)
 
 

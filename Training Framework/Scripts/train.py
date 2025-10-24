@@ -1,4 +1,4 @@
-import os, torch, shutil
+import os, torch, shutil, copy
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
@@ -27,7 +27,7 @@ def accuracy_fn(y_real, y_pred, padding_index):
 
 def compute_mean_std(dataset):
     # Concatenate all tensors
-    all_data = torch.cat([X for X, _ in dataset], dim=0)  # shape: (total_frames, feature_dim)
+    all_data = torch.cat([X for X, _ in dataset], dim=0)  # total_frames, feature_dim
     mean = all_data.mean().item()
     std = all_data.std().item()
     return mean, std
@@ -78,7 +78,7 @@ def train(config: Config):
             y = [chord_tool.encode(chord=chord_tool.reduce(chord, complexity), type=complexity)
                 for chord in y_raw]
 
-            X_tensor = torch.tensor(X, dtype=torch.float32)
+            X_tensor = torch.tensor(X, dtype=torch.float64)
             y_tensor = torch.tensor(y, dtype=torch.long)
             train_tensors.append((X_tensor, y_tensor))
 
@@ -87,6 +87,10 @@ def train(config: Config):
     for fragment in tqdm(os.listdir(test_fold_path), desc="Loading test fold"):
         if not fragment.endswith(".npz"):
             continue
+
+        if "_shift00_" not in fragment:
+            continue
+
         fragment_path = os.path.join(test_fold_path, fragment)
         data = np.load(fragment_path)
         X = data["X"]
@@ -95,13 +99,13 @@ def train(config: Config):
         y = [chord_tool.encode(chord=chord_tool.reduce(chord, complexity), type=complexity)
             for chord in y_raw]
 
-        X_tensor = torch.tensor(X, dtype=torch.float32)
+        X_tensor = torch.tensor(X, dtype=torch.float64)
         y_tensor = torch.tensor(y, dtype=torch.long)
         test_tensors.append((X_tensor, y_tensor))
 
     # Dataset
-    train_dataset = SongDataset(train_tensors)
-    test_dataset = SongDataset(test_tensors)
+    train_dataset = SongDataset(train_tensors, config)
+    test_dataset = SongDataset(test_tensors, config)
     train_dataloader = DataLoader(train_dataset, batch_size=config.train.model.batch_size,shuffle=True, collate_fn=make_collate_fn(config.train.model.padding_index))
     test_dataloader = DataLoader(test_dataset, batch_size=config.train.model.batch_size, shuffle=False, collate_fn=make_collate_fn(config.train.model.padding_index))
 
@@ -141,13 +145,15 @@ def train(config: Config):
     ## Initialization
     start_epoch = 0
     epoch = start_epoch
+    best_model = None
+    best_epoch = 0
     train_loss_list, train_accuracy_list, test_loss_list, test_accuracy_list = [], [], [], []
 
     # Check and load pretrained (trains additional epoch_count)
-    final_model_path = os.path.join(model_folder, "final_model.pt")
+    final_model_path = os.path.join(model_folder, "best_model.pt")
     if os.path.exists(final_model_path):
             # Load model and optimizer
-            model_path = os.path.join(model_folder, "final_model.pt")
+            model_path = os.path.join(model_folder, "best_model.pt")
             loaded: dict = torch.load(model_path, map_location=device)
             model.load_state_dict(loaded['model'])
             optimizer.load_state_dict(loaded['optimizer'])
@@ -171,6 +177,10 @@ def train(config: Config):
             checkpoint_path = os.path.join(model_folder, checkpoint_name)
             shutil.move(model_path, checkpoint_path)
 
+    # Early stopping params
+    patience = config.train.model.loss_patience
+    best_test_loss = float('inf')
+    epochs_no_improve = 0
 
     pbar = tqdm(range(start_epoch, start_epoch + config.train.model.epoch_count), desc="Training Progress")
     ## Pipeline
@@ -193,10 +203,6 @@ def train(config: Config):
             ##### Per Dataset
             X_batch = (X_batch-train_mean)/train_std
             targets = y_batch
-
-            ##### Per tensor
-            # if config.data.preprocess.pcp.enabled:
-            #     X_batch = X_batch / (X_batch.sum(dim=-1, keepdim=True) + 1e-8) # Normalize to sum = 1 for pcp
 
             #### 1. Forward pass
             logits = model(X_batch)
@@ -276,6 +282,35 @@ def train(config: Config):
             test_loss_list.append(test_loss_avg)
             test_accuracy_list.append(test_acc_avg)
             tqdm.write(f"Epoch: {epoch} | Loss: {train_loss_avg:.5f}, Acc: {train_acc_avg:.2f}% | Test Loss: {test_loss_avg:.5f}, Test Acc: {test_acc_avg:.2f}%\n")
+        
+        # Early stopping
+        if test_loss_avg < best_test_loss:
+            # Store best values
+            best_test_loss = test_loss_avg
+            best_model = copy.deepcopy(model.state_dict())
+            best_epoch = epoch
+            best_losses = {
+                'train_losses': train_loss_list,
+                'train_accuracies': train_accuracy_list,
+                'test_losses': test_loss_list,
+                'test_accuracies': test_accuracy_list
+            }
+            best_optimizer = copy.deepcopy(optimizer.state_dict())
+            epochs_no_improve = 0
+        else:
+            epochs_no_improve += 1
+
+        if epochs_no_improve >= patience:
+            print(f"Early stopping at epoch {epoch+1}, test loss has not improved for {patience} epochs.")
+            # Save best model
+            normalization = {
+                        'mean': train_mean,
+                        'std': train_std
+            }
+            model_path = os.path.join(model_folder, "best_model.pt")
+            state_dict={'model': best_model, 'optimizer': best_optimizer, 'epoch': best_epoch, 'loss': best_losses, 'normalization': normalization}
+            torch.save(state_dict, model_path)
+            break
 
     losses = {
         'train_losses': train_loss_list,

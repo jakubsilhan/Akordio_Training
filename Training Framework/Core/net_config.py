@@ -33,6 +33,7 @@ class ModelConfig(BaseModel):
     layers: int
     bidirectional: bool
     padding_index: int
+    loss_patience: int
     epoch_count: int
     learning_rate: float
     weight_decay: float
