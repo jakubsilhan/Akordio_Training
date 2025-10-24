@@ -1,5 +1,5 @@
-from core.net_config import Config, load_config
-from core.preprocessor import Preprocessor
+from Akordio_Core.net_config import Config, load_config
+from Akordio_Core.preprocessor import Preprocessor
 
 if __name__ == "__main__":
     config = load_config("config.yaml")

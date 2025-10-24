@@ -6,9 +6,9 @@ import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
-from core.chords import Chords, Complexity
-from core.net_config import Config, load_config
-from core.song_dataset import SongDataset, make_collate_fn
+from Akordio_Core.chords import Chords, Complexity
+from Akordio_Core.net_config import Config, load_config
+from Akordio_Core.song_dataset import SongDataset, make_collate_fn
 from Neural_Nets.CR1 import Model as CR1
 from Neural_Nets.SimpleLSTM import Model as SimpleLSTM
 from Neural_Nets.BTC import Model as BTC

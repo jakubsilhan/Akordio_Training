@@ -1,0 +1,3 @@
+[submodule "Akordio_Core"]
+	path = Akordio_Core
+	url = git@github.com:jakubsilhan/Akordio_Core.git

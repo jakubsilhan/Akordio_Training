@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from core.net_config import Config
+from Akordio_Core.net_config import Config
 
 class Model(nn.Module):
     def __init__(self, config: Config, device):

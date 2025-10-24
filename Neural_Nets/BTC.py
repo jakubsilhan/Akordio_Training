@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import math
 
-from core.net_config import Config
+from Akordio_Core.net_config import Config
 
 use_cuda = torch.cuda.is_available()
 
