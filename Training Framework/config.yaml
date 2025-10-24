@@ -1,9 +1,9 @@
 base:
   random_seed: 8
 data:
-  dataset_dir: "D:/Development/Source/University/Diploma/chord-recognition/Training Framework/Datasets"
+  dataset_dir: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Training Framework/Datasets"
   datasets: [Beatles, Uspop2000, CaroleKing, Queen, RobbieWilliams]
-  preprocessed_dir: "D:/Development/Source/University/Diploma/chord-recognition/Training Framework/Data/BaseDataset"
+  preprocessed_dir: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Training Framework/Data/BaseDataset"
   preprocess:
     pcp:
       enabled: False # whether to use pcp or log CQT
@@ -19,8 +19,8 @@ data:
     pitch_shift_end: 5 # highest pitch shift
     sampling_rate: 22050 # sampling rate
 train: # used for both training a evaluating
-  data_source: "D:/Development/Source/University/Diploma/chord-recognition/Training Framework/Data/BaseDataset"
-  model_path: "D:/Development/Source/University/Diploma/chord-recognition/Training Framework/Models"
+  data_source: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Training Framework/Data/BaseDataset"
+  model_path: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Training Framework/Models"
   model_name: "cr1_144_majmin7"
   test_fold: 3 # which fold to use as test set
   model_type: "CR1" # CR1/SimpleLSTM/BTC...
