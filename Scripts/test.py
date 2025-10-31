@@ -8,9 +8,13 @@ from torch.utils.data import DataLoader
 from Akordio_Core.chords import Chords, Complexity
 from Akordio_Core.net_config import Config, load_config
 from Akordio_Core.song_dataset import SongDataset, make_collate_fn
+from Neural_Nets.CNN import Model as CNN
+from Neural_Nets.FifthNet import Model as FifthNet
 from Neural_Nets.CR1 import Model as CR1
+from Neural_Nets.CR2 import Model as CR2
 from Neural_Nets.SimpleLSTM import Model as SimpleLSTM
 from Neural_Nets.BTC import Model as BTC
+
 
 def test(config: Config):
     # Initialization
@@ -58,7 +62,22 @@ def test(config: Config):
             ).to(device)
         case "BTC":
             model = BTC(
-                config=config,
+                config=config, 
+                device=device
+            ).to(device)
+        case "CR2":
+            model = CR2(
+                config=config, 
+                device=device
+            ).to(device)
+        case "CNN":
+            model = CNN(
+                config=config, 
+                device=device
+            ).to(device)
+        case "FifthNet":
+            model = FifthNet(
+                config=config, 
                 device=device
             ).to(device)
         case _:

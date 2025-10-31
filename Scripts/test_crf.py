@@ -9,7 +9,10 @@ from torch.nn.utils.rnn import pad_sequence
 from Akordio_Core.chords import Chords, Complexity
 from Akordio_Core.net_config import Config, load_config
 from Akordio_Core.song_dataset import SongDataset, make_collate_fn
+from Neural_Nets.CNN import Model as CNN
+from Neural_Nets.FifthNet import Model as FifthNet
 from Neural_Nets.CR1 import Model as CR1
+from Neural_Nets.CR2 import Model as CR2
 from Neural_Nets.SimpleLSTM import Model as SimpleLSTM
 from Neural_Nets.BTC import Model as BTC
 from TorchCRF import CRF
@@ -67,7 +70,22 @@ def test(config: Config):
             ).to(device)
         case "BTC":
             pre_model = BTC(
-                config=config,
+                config=config, 
+                device=device
+            ).to(device)
+        case "CR2":
+            pre_model = CR2(
+                config=config, 
+                device=device
+            ).to(device)
+        case "CNN":
+            pre_model = CNN(
+                config=config, 
+                device=device
+            ).to(device)
+        case "FifthNet":
+            pre_model = FifthNet(
+                config=config, 
                 device=device
             ).to(device)
         case _:

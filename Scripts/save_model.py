@@ -1,0 +1,1 @@
+# TODO Add a script to copy models to Akordio-Core for easier updates

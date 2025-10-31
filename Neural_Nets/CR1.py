@@ -2,6 +2,8 @@ import torch
 from Akordio_Core.net_config import Config
 import torch.nn as nn
 
+"""Based on https://brianmcfee.net/papers/ismir2017_chord.pdf"""
+
 class Model(nn.Module):
     def __init__(self, config: Config, device):
         super().__init__()

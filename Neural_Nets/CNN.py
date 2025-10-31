@@ -2,6 +2,8 @@ import torch
 from Akordio_Core.net_config import Config
 import torch.nn as nn
 
+"""Based on https://ieeexplore.ieee.org/document/7738895"""
+
 class Model(nn.Module):
     def __init__(self, config: Config, device):
         super().__init__()
@@ -10,26 +12,77 @@ class Model(nn.Module):
         self.dropout = config.train.model.dropout
         self.device = device
         
-        # Activation
-        self.relu = nn.ReLU(inplace=True)
-        
-        # Batchnorm and dropout
-        self.batch_norm = nn.BatchNorm2d(1)
+        # First Conv block
+        self.conv_block_1 = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32,32, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32,32, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32,32, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=(2,1))
+        )
 
-        # Convolutional layer
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(5,5), padding=2)  # preserve sequence length
-        self.conv2 = nn.Conv2d(1, 36, kernel_size=(1, self.feature_size))
+        # Second Conv block
+        self.conv_block_2 = nn.Sequential(
+            nn.Conv2d(32, 64, kernel_size=3, padding=0),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, padding=0),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=(2,1))
+        )
 
-        # Output
-        self.fc = nn.Linear(36, self.output_features)
+        # Third Conv block
+        self.conv_block_3 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=(12, 9), padding=0),
+            nn.ReLU(inplace=True)
+        )
+
+        self.conv_linear = nn.Conv2d(128, self.output_features, kernel_size=(1, 1), padding=0)
+        self.avg_pool = nn.AvgPool2d(kernel_size=(13,3))
 
     def forward(self, x):
-        # [batch_size, timestep,feature_size]
-        x = x.unsqueeze(1) # [batch_size, num_channels=1, timestep, feature_size]
-        x = self.batch_norm(x)
+        # # [batch_size, timestep,feature_size]
+        # x = x.unsqueeze(1) # [batch_size, 1, timestep, feature_size]
+        # x = x.transpose(2, 3) # [batch, 1, feature_size, time_frames]
+        # # TODO consider slicing into context windows
+        # x = self.conv_block_1(x)
+        # x = self.conv_block_2(x)
+        # x = self.conv_block_3(x)
+        # x = self.conv_linear(x)
+        # x = self.avg_pool(x)
+        # x = x.squeeze(-1) # [batch_size, feature_size, timestep]
+        # x = x.transpose(1, 2) # [batch_size, timestep, feature_size]
 
-        conv = self.relu(self.conv1(x))
-        conv = self.relu(self.conv2(conv)) # [batch, out_feature_maps=out_channels, in_feature]
-        conv = conv.squeeze(3).permute(0,2,1) # [batch, timestep, feature]
-        logits = self.fc(conv)
-        return logits
+        # x: [batch_size, timestep, feature_size]
+        batch_size, timestep, feature_size = x.shape
+        context = 7  # same as old model
+
+        # Pad along time dimension
+        x = x.permute(0, 2, 1)  # [batch, feature, time]
+        x = nn.functional.pad(x, (context, context), "constant", 0)
+
+        # Extract context windows
+        inputs = []
+        for i in range(batch_size):
+            for t in range(timestep):
+                window = x[i, :, t : t + 2*context + 1]  # [feature, context*2+1]
+                inputs.append(window)
+        inputs = torch.stack(inputs)  # [batch*timestep, feature, context*2+1]
+        inputs = inputs.unsqueeze(1)  # [batch*timestep, 1, feature, context*2+1]
+
+        # Continue as before
+        out = self.conv_block_1(inputs)
+        out = self.conv_block_2(out)
+        out = self.conv_block_3(out)
+        out = self.conv_linear(out)
+        out = self.avg_pool(out)
+        out = out.squeeze(-1).squeeze(-1)  # [batch*timestep, num_chords]
+
+        # Return to [batch, timestep, num_chords]
+        out = out.view(batch_size, timestep, -1)
+        return out
+
+        # return x

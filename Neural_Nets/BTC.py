@@ -6,7 +6,7 @@ import math
 
 from Akordio_Core.net_config import Config
 
-use_cuda = torch.cuda.is_available()
+"""Based on https://arxiv.org/pdf/1907.02698"""
 
 class Model(nn.Module):
     def __init__(self, config: Config, device):

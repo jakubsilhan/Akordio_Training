@@ -1,4 +1,4 @@
-import os, torch, shutil, copy
+import os, torch, shutil
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
@@ -7,7 +7,10 @@ from tqdm import tqdm
 from Akordio_Core.net_config import Config, load_config
 from Akordio_Core.song_dataset import SongDataset, make_collate_fn
 from torch.utils.data import DataLoader
+from Neural_Nets.CNN import Model as CNN
+from Neural_Nets.FifthNet import Model as FifthNet
 from Neural_Nets.CR1 import Model as CR1
+from Neural_Nets.CR2 import Model as CR2
 from Neural_Nets.SimpleLSTM import Model as SimpleLSTM
 from Neural_Nets.BTC import Model as BTC
 from Akordio_Core.chords import Chords, Complexity
@@ -31,6 +34,13 @@ def compute_mean_std(dataset):
     mean = all_data.mean().item()
     std = all_data.std().item()
     return mean, std
+
+def adjusting_learning_rate(optimizer, factor=.5, min_lr=0.00001):
+    for i, param_group in enumerate(optimizer.param_groups):
+        old_lr = float(param_group['lr'])
+        new_lr = max(old_lr * factor, min_lr)
+        param_group['lr'] = new_lr
+        print('adjusting learning rate from %.6f to %.6f' % (old_lr, new_lr))
 
 def train(config: Config):
     # Initialization
@@ -123,6 +133,24 @@ def train(config: Config):
                 config=config, 
                 device=device
             ).to(device)
+        case "CR2":
+            shutil.copy2("Neural_Nets/CR2.py", model_folder+"/Model.py")
+            model = CR2(
+                config=config, 
+                device=device
+            ).to(device)
+        case "CNN":
+            shutil.copy2("Neural_Nets/CNN.py", model_folder+"/Model.py")
+            model = CNN(
+                config=config, 
+                device=device
+            ).to(device)
+        case "FifthNet":
+            shutil.copy2("Neural_Nets/FifthNet.py", model_folder+"/Model.py")
+            model = FifthNet(
+                config=config, 
+                device=device
+            ).to(device)
         case _:
             shutil.copy2("Neural_Nets/CR1.py", model_folder+"/Model.py")
             model = CR1(
@@ -133,21 +161,14 @@ def train(config: Config):
     # Loss and optimizer
     model.to(device)
     loss_fn = nn.CrossEntropyLoss(ignore_index=config.train.model.padding_index)
-    optimizer = optim.Adam(model.parameters(), lr=config.train.model.learning_rate, weight_decay=config.train.model.weight_decay)
-    scheduler = optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=config.train.model.scheduler_step, gamma=config.train.model.scheduler_gamma)
+    optimizer = optim.Adam(model.parameters(), lr=config.train.model.learning_rate, weight_decay=config.train.model.weight_decay, betas=(0.9, 0.98), eps=1e-9)
+    # scheduler = optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=config.train.model.scheduler_step, gamma=config.train.model.scheduler_gamma)
 
     # data info
     train_mean, train_std = compute_mean_std(train_dataset)
 
     # Training loop
     torch.manual_seed(config.base.random_seed)
-
-    ## Initialization
-    start_epoch = 0
-    epoch = start_epoch
-    best_model = None
-    best_epoch = 0
-    train_loss_list, train_accuracy_list, test_loss_list, test_accuracy_list = [], [], [], []
 
     # Check and load pretrained (trains additional epoch_count)
     final_model_path = os.path.join(model_folder, "best_model.pt")
@@ -177,9 +198,17 @@ def train(config: Config):
             checkpoint_path = os.path.join(model_folder, checkpoint_name)
             shutil.move(model_path, checkpoint_path)
 
+    # Initialization
+    start_epoch = 0
+    epoch = start_epoch
+    best_model = None
+    best_epoch = 0
+    before_acc = 0
+    train_loss_list, train_accuracy_list, test_loss_list, test_accuracy_list = [], [], [], []
+
     # Early stopping params
     patience = config.train.model.loss_patience
-    best_test_loss = float('inf')
+    best_test_acc = float(0)
     epochs_no_improve = 0
 
     pbar = tqdm(range(start_epoch, start_epoch + config.train.model.epoch_count), desc="Training Progress")
@@ -227,7 +256,7 @@ def train(config: Config):
             #### 5. Optimizer step
             optimizer.step()
 
-        scheduler.step()
+        # scheduler.step()
 
         ### Test
         for X_batch, y_batch in test_dataloader:
@@ -277,6 +306,8 @@ def train(config: Config):
             test_loss_avg = sum(test_losses)/len(test_losses)
             test_acc_avg = sum(test_accuracies)/len(test_accuracies)
 
+            current_acc = test_acc_avg
+
             train_loss_list.append(train_loss_avg)
             train_accuracy_list.append(train_acc_avg)
             test_loss_list.append(test_loss_avg)
@@ -284,10 +315,10 @@ def train(config: Config):
             tqdm.write(f"Epoch: {epoch} | Loss: {train_loss_avg:.5f}, Acc: {train_acc_avg:.2f}% | Test Loss: {test_loss_avg:.5f}, Test Acc: {test_acc_avg:.2f}%\n")
         
         # Early stopping
-        if test_loss_avg < best_test_loss:
+        if test_acc_avg > best_test_acc:
             # Store best values
-            best_test_loss = test_loss_avg
-            best_model = copy.deepcopy(model.state_dict())
+            best_test_acc = test_acc_avg
+            best_model = model.state_dict()
             best_epoch = epoch
             best_losses = {
                 'train_losses': train_loss_list,
@@ -295,23 +326,29 @@ def train(config: Config):
                 'test_losses': test_loss_list,
                 'test_accuracies': test_accuracy_list
             }
-            best_optimizer = copy.deepcopy(optimizer.state_dict())
+            best_optimizer = optimizer.state_dict()
             epochs_no_improve = 0
         else:
             epochs_no_improve += 1
 
         if epochs_no_improve >= patience:
             print(f"Early stopping at epoch {epoch+1}, test loss has not improved for {patience} epochs.")
-            # Save best model
-            normalization = {
-                        'mean': train_mean,
-                        'std': train_std
-            }
-            model_path = os.path.join(model_folder, "best_model.pt")
-            state_dict={'model': best_model, 'optimizer': best_optimizer, 'epoch': best_epoch, 'loss': best_losses, 'normalization': normalization}
-            torch.save(state_dict, model_path)
             break
 
+        if before_acc > current_acc:
+            adjusting_learning_rate(optimizer=optimizer, factor=0.95, min_lr=5e-6)
+        before_acc = current_acc
+
+    # Save best model
+    normalization = {
+                'mean': train_mean,
+                'std': train_std
+    }
+    model_path = os.path.join(model_folder, "best_model.pt")
+    state_dict={'model': best_model, 'optimizer': best_optimizer, 'epoch': best_epoch, 'loss': best_losses, 'normalization': normalization}
+    torch.save(state_dict, model_path)
+
+    # Save final model
     losses = {
         'train_losses': train_loss_list,
         'train_accuracies': train_accuracy_list,
@@ -323,7 +360,6 @@ def train(config: Config):
                 'std': train_std
     }
 
-    # Save model
     model_path = os.path.join(model_folder, "final_model.pt")
     state_dict={'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch, 'loss': losses, 'normalization': normalization}
     torch.save(state_dict, model_path)

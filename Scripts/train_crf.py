@@ -7,7 +7,10 @@ from Akordio_Core.net_config import Config, load_config
 from Akordio_Core.song_dataset import SongDataset, make_collate_fn
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
+from Neural_Nets.CNN import Model as CNN
+from Neural_Nets.FifthNet import Model as FifthNet
 from Neural_Nets.CR1 import Model as CR1
+from Neural_Nets.CR2 import Model as CR2
 from Neural_Nets.SimpleLSTM import Model as SimpleLSTM
 from Neural_Nets.BTC import Model as BTC
 from Akordio_Core.chords import Chords, Complexity
@@ -108,7 +111,6 @@ def train(config: Config):
     test_dataloader = DataLoader(test_dataset, batch_size=config.train.model.batch_size, shuffle=False, collate_fn=make_collate_fn(config.train.model.padding_index))
 
     # Model
-    # TODO Add Transformer, CR2 and a PCP RNN
     match config.train.model_type:
         case "SimpleLSTM":
             pre_model = SimpleLSTM(
@@ -120,6 +122,21 @@ def train(config: Config):
                 config=config, 
                 device=device
             ).to(device)
+        case "CR2":
+            pre_model = CR2(
+                config=config, 
+                device=device
+            ).to(device)
+        case "CNN":
+            pre_model = CNN(
+                config=config, 
+                device=device
+            ).to(device)
+        case "FifthNet":
+            pre_model = FifthNet(
+                config=config, 
+                device=device
+            ).to(device)
         case _:
             pre_model = CR1(
                 config=config,
@@ -128,7 +145,7 @@ def train(config: Config):
     
     # Load pre-model
     pre_model.to(device)
-    model_path = os.path.join(model_folder, "final_model.pt")
+    model_path = os.path.join(model_folder, "best_model.pt")
     loaded = torch.load(model_path, map_location=device)
     pre_model.load_state_dict(loaded['model'])
     normalization = loaded['normalization']
@@ -150,6 +167,13 @@ def train(config: Config):
 
     test_loss_list = []
     test_accuracy_list = []
+
+    # Early stopping params
+    patience = config.train.model.loss_patience
+    best_test_loss = float('inf')
+    epochs_no_improve = 0
+    best_model = None
+    best_epoch = 0
 
     pbar = tqdm(range(30), desc="Training Progress") # TODO add proper epoch crf count
 
@@ -262,6 +286,33 @@ def train(config: Config):
             test_accuracy_list.append(test_acc_avg)
             tqdm.write(f"Epoch: {epoch} | Loss: {train_loss_avg:.5f}, Acc: {train_acc_avg:.2f}% | Test Loss: {test_loss_avg:.5f}, Test Acc: {test_acc_avg:.2f}%\n")
 
+         # Early stopping
+        if test_loss_avg < best_test_loss:
+            # Store best values
+            best_test_loss = test_loss_avg
+            best_model = crf.state_dict()
+            best_epoch = epoch
+            best_losses = {
+                'train_losses': train_loss_list,
+                'train_accuracies': train_accuracy_list,
+                'test_losses': test_loss_list,
+                'test_accuracies': test_accuracy_list
+            }
+            best_optimizer = optimizer.state_dict()
+            epochs_no_improve = 0
+        else:
+            epochs_no_improve += 1
+
+        if epochs_no_improve >= patience:
+            print(f"Early stopping at epoch {epoch+1}, test loss has not improved for {patience} epochs.")
+            break
+
+    # Save best model
+    model_path = os.path.join(model_folder, "best_crf_model.pt")
+    state_dict={'model': best_model, 'optimizer': best_optimizer, 'epoch': best_epoch, 'loss': best_losses}
+    torch.save(state_dict, model_path)
+
+    # Save final model
     losses = {
         'train_losses': train_loss_list,
         'train_accuracies': train_accuracy_list,
@@ -269,7 +320,6 @@ def train(config: Config):
         'test_accuracies': test_accuracy_list
     }
 
-    # Save model
     model_path = os.path.join(model_folder, "final_crf_model.pt")
     state_dict={'model': crf.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch, 'loss': losses}
     torch.save(state_dict, model_path)
