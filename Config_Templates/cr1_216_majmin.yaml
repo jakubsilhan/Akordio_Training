@@ -1,5 +1,5 @@
 base:
-  random_seed: 8
+  random_seed: 42
 data:
   dataset_dir: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Datasets"
   datasets: [Beatles, Uspop2000, CaroleKing, Queen, RobbieWilliams]
@@ -25,7 +25,7 @@ train: # used for both training a evaluating
   test_fold: 3 # which fold to use as test set
   model_type: "CR1" # CR1/SimpleLSTM/BTC...
   model_complexity: "majmin" # which type of chords to train (majmin/majmin7/complex)
-  checkpoint_interval: 10
+  checkpoint_interval: 25
   model:
     batch_size: 128
     input: 216 # feature size 144/216
@@ -36,7 +36,7 @@ train: # used for both training a evaluating
     bidirectional: True
     padding_index: -1
     epoch_count: 100
-    loss_patience: 20
+    loss_patience: 10
     learning_rate: 1e-4
     weight_decay: 1e-5
     scheduler_step: 100

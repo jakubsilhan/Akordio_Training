@@ -1,4 +1,4 @@
-import os, torch
+import os, torch, joblib
 import numpy as np
 import torch.optim as optim
 import matplotlib.pyplot as plt
@@ -7,13 +7,9 @@ from Akordio_Core.net_config import Config, load_config
 from Akordio_Core.song_dataset import SongDataset, make_collate_fn
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
-from Neural_Nets.CNN import Model as CNN
-from Neural_Nets.FifthNet import Model as FifthNet
-from Neural_Nets.CR1 import Model as CR1
-from Neural_Nets.CR2 import Model as CR2
-from Neural_Nets.SimpleLSTM import Model as SimpleLSTM
-from Neural_Nets.BTC import Model as BTC
 from Akordio_Core.chords import Chords, Complexity
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
 from TorchCRF import CRF
 
 def accuracy_fn(y_real, y_pred, padding_index):
@@ -110,49 +106,12 @@ def train(config: Config):
     train_dataloader = DataLoader(train_dataset, batch_size=config.train.model.batch_size,shuffle=True, collate_fn=make_collate_fn(config.train.model.padding_index))
     test_dataloader = DataLoader(test_dataset, batch_size=config.train.model.batch_size, shuffle=False, collate_fn=make_collate_fn(config.train.model.padding_index))
 
-    # Model
-    match config.train.model_type:
-        case "SimpleLSTM":
-            pre_model = SimpleLSTM(
-                config=config,
-                device=device
-            ).to(device)
-        case "BTC":
-            pre_model = BTC(
-                config=config, 
-                device=device
-            ).to(device)
-        case "CR2":
-            pre_model = CR2(
-                config=config, 
-                device=device
-            ).to(device)
-        case "CNN":
-            pre_model = CNN(
-                config=config, 
-                device=device
-            ).to(device)
-        case "FifthNet":
-            pre_model = FifthNet(
-                config=config, 
-                device=device
-            ).to(device)
-        case _:
-            pre_model = CR1(
-                config=config,
-                device=device
-            ).to(device)
     
     # Load pre-model
-    pre_model.to(device)
-    model_path = os.path.join(model_folder, "best_model.pt")
-    loaded = torch.load(model_path, map_location=device)
-    pre_model.load_state_dict(loaded['model'])
-    normalization = loaded['normalization']
-
-    pre_model.eval()
-    for p in pre_model.parameters():
-        p.requires_grad = False
+    model_path = os.path.join(model_folder, "model.joblib")
+    loaded = joblib.load(model_path)
+    pre_model: LogisticRegression = loaded["model"]
+    scaler: StandardScaler = loaded["scaler"]
 
     # Initialize CRF
     crf = CRF(num_labels=config.train.model.output).to(device)
@@ -189,20 +148,22 @@ def train(config: Config):
         ### Train
         for X_batch, y_batch in train_dataloader:
             ####Move to device (GPU or CPU)
-            X_batch = X_batch.to(device)
+            X_batch = np.array(X_batch, dtype=np.float32)
             y_batch = y_batch.to(device)
             mask = (y_batch != config.train.model.padding_index).to(device)
 
             #### Normalization
             ##### Per Dataset
-            X_batch = (X_batch-normalization['mean'])/normalization['std']
+            X_batch = scaler.transform(X_batch)
             targets = y_batch
 
             #### 1. Forward pass
-            with torch.inference_mode():
-                logits = pre_model(X_batch)
-
-            preds = crf.viterbi_decode(logits, mask)
+            batch_size, seq_len, feat_dim = X_batch.shape
+            X_flat = X_batch.reshape(-1, feat_dim)
+            probs = pre_model.predict_proba(X_flat)
+            logits = torch.from_numpy(probs).float()
+            logits = torch.log(logits + 1e-8).view(batch_size, seq_len, -1).to(device)
+            preds = crf.viterbi_decode(logits, mask)  # type: ignore
 
             # Convert to tensor and pad
             preds_tensor = [torch.tensor(p, device=device) for p in preds]
@@ -230,23 +191,27 @@ def train(config: Config):
         ### Test
         for X_batch, y_batch in test_dataloader:
             #### Move to device (GPU or CPU)
-            X_batch = X_batch.to(device)
+            X_batch = np.array(X_batch, dtype=np.float32)
             y_batch = y_batch.to(device)
             mask = (y_batch != config.train.model.padding_index).to(device)
 
             #### Normalization
-            X_batch = (X_batch-normalization['mean'])/normalization['std']
+            X_batch = scaler.transform(X_batch)
             targets = y_batch
 
             #### 1. Forward pass
             with torch.inference_mode():
-                logits = pre_model(X_batch)
+                batch_size, seq_len, feat_dim = X_batch.shape
+                X_flat = X_batch.reshape(-1, feat_dim)
+                probs = pre_model.predict_proba(X_flat)                
+                logits = torch.from_numpy(probs).float()
+                logits = torch.log(logits + 1e-8).view(batch_size, seq_len, -1).to(device)
 
                 #### 2. Loss and accuracy
                 log_likelihood = crf(logits, y_batch, mask)
                 loss = -log_likelihood.mean()
 
-                preds = crf.viterbi_decode(logits, mask)
+                preds = crf.viterbi_decode(logits, mask)  # type: ignore
 
             # Convert to tensor and pad
             preds_tensor = [torch.tensor(p, device=device) for p in preds]

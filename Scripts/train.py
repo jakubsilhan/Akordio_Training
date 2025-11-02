@@ -161,7 +161,9 @@ def train(config: Config):
     # Loss and optimizer
     model.to(device)
     loss_fn = nn.CrossEntropyLoss(ignore_index=config.train.model.padding_index)
+    # if config.train.model_type == "BTC":
     optimizer = optim.Adam(model.parameters(), lr=config.train.model.learning_rate, weight_decay=config.train.model.weight_decay, betas=(0.9, 0.98), eps=1e-9)
+    # optimizer = optim.Adam(model.parameters(), lr=config.train.model.learning_rate, weight_decay=config.train.model.weight_decay)
     # scheduler = optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=config.train.model.scheduler_step, gamma=config.train.model.scheduler_gamma)
 
     # data info
@@ -203,7 +205,7 @@ def train(config: Config):
     epoch = start_epoch
     best_model = None
     best_epoch = 0
-    before_acc = 0
+    before_acc = float('-inf')
     train_loss_list, train_accuracy_list, test_loss_list, test_accuracy_list = [], [], [], []
 
     # Early stopping params
@@ -328,6 +330,7 @@ def train(config: Config):
             }
             best_optimizer = optimizer.state_dict()
             epochs_no_improve = 0
+            print(f"New best model with acc: {best_test_acc} at epoch: {best_epoch}")
         else:
             epochs_no_improve += 1
 
