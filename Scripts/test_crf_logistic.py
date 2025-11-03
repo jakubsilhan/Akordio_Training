@@ -81,12 +81,15 @@ def test(config: Config):
 
     for X_batch, y_batch in tqdm(test_dataloader, desc="Evaluating"):
         #### Move to device (GPU or CPU)
-        X_batch = np.array(X_batch, dtype=np.float32)
+        X_batch = X_batch.detach().cpu().numpy().astype(np.float32)
         y_batch = y_batch.to(device)
         mask = (y_batch != config.train.model.padding_index).to(device)
 
         #### Normalization
-        X_batch = scaler.transform(X_batch)
+        batch_size, seq_len, feat_dim = X_batch.shape
+        X_flat = X_batch.reshape(-1, feat_dim)
+        X_scaled = scaler.transform(X_flat)
+        X_batch = X_scaled.reshape(batch_size, seq_len, feat_dim)
         targs = y_batch
 
         with torch.inference_mode():

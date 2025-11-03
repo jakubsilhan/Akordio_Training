@@ -40,7 +40,7 @@ def adjusting_learning_rate(optimizer, factor=.5, min_lr=0.00001):
         old_lr = float(param_group['lr'])
         new_lr = max(old_lr * factor, min_lr)
         param_group['lr'] = new_lr
-        print('adjusting learning rate from %.6f to %.6f' % (old_lr, new_lr))
+        print(f"adjusting learning rate from {old_lr:.6f} to {new_lr:.6f}\n")
 
 def train(config: Config):
     # Initialization
@@ -330,12 +330,12 @@ def train(config: Config):
             }
             best_optimizer = optimizer.state_dict()
             epochs_no_improve = 0
-            print(f"New best model with acc: {best_test_acc} at epoch: {best_epoch}")
+            print(f"New best model with acc: {best_test_acc} at epoch: {best_epoch} \n")
         else:
             epochs_no_improve += 1
 
         if epochs_no_improve >= patience:
-            print(f"Early stopping at epoch {epoch+1}, test loss has not improved for {patience} epochs.")
+            print(f"Early stopping at epoch {epoch+1}, test loss has not improved for {patience} epochs. \n")
             break
 
         if before_acc > current_acc:
