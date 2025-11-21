@@ -11,6 +11,7 @@ class Model(nn.Module):
         self.output_features = config.train.model.output
         self.dropout = config.train.model.dropout
         self.device = device
+        self.timestep = config.data.preprocess.fragment_size
         
         # dropout
         self.dropout_layer = nn.Dropout2d(p=self.dropout[0])
@@ -51,21 +52,34 @@ class Model(nn.Module):
         )
 
         self.conv_linear = nn.Conv2d(128, self.output_features, kernel_size=(1, 1), padding=0)
-        self.avg_pool = nn.AvgPool2d(kernel_size=(13,3))
 
     def forward(self, x):
         # [batch_size, timestep, feature_size]
         batch_size, timestep, feature_size = x.shape
-        context = 7  # same as old model
+        context = 7
+        window_size = 2 * context + 1
 
         # Pad along time dimension
         x = x.permute(0, 2, 1)  # [batch, feature, time]
-        x = nn.functional.pad(x, (context, context), "constant", 0)
+        pad = nn.ConstantPad1d(context, 0)
+        x = pad(x)
 
-        # Extract context windows
-        x = x.unfold(dimension=2, size=2*context+1, step=1)  # [batch, feature, window, timestep]
-        x = x.permute(0, 3, 1, 2)  # [batch, timestep, feature, window]
-        x = x.reshape(batch_size * timestep, 1, feature_size, 2*context + 1) # [batch*timestep, 1, feature, context*2+1]
+        # Extract context window
+        result_tensors = []
+        for i in range(batch_size):
+            for j in range(self.timestep):
+                tmp = x[i, :, j : j + window_size].unsqueeze(0) # Window slice
+                
+                if tmp.size(-1) < window_size: # Pad if short
+                    padding_needed = window_size - tmp.size(-1)
+                    tmp = nn.functional.pad(tmp, (0, padding_needed), "constant", 0)
+                    
+                result_tensors.append(tmp)
+
+        # Concatenate windowed data
+        x = torch.cat(result_tensors, dim=0)
+        
+        x = x.unsqueeze(1) # [batchsize * timestep, feature_size, context]
 
         # Continue as before
         out = self.conv_block_1(x)
@@ -77,9 +91,8 @@ class Model(nn.Module):
         out = self.conv_linear(out)
         avg = nn.AvgPool2d(kernel_size=(out.size(2), out.size(3)))
         out = avg(out)
-        # out = self.avg_pool(out)
-        out = out.squeeze(-1).squeeze(-1)  # [batch*timestep, num_chords]
 
-        # Return to [batch, timestep, num_chords]
-        out = out.view(batch_size, timestep, -1)
+        out = out.squeeze(-1).squeeze(-1)  # [batch*timestep, num_chords]
+        out = out.view(batch_size, timestep, -1) # [batch, timestep, num_chords]
+        # out = out.squeeze(2).squeeze(2)
         return out
