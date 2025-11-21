@@ -87,9 +87,9 @@ class BaseTrainer:
         model = model_class(config=self.config, device=self.device).to(self.device)
         return model
 
-    def load_checkpoint_if_exists(self, model: nn.Module, optimizer: optim.Optimizer, train_mean: float, train_std: float) -> Tuple[TrainingState, float, float]:
+    def load_checkpoint_if_exists(self, model: nn.Module, optimizer: optim.Optimizer, train_mean: float, train_std: float, prefix = "") -> Tuple[TrainingState, float, float]:
             """Load checkpoint if it exists, otherwise return fresh training state"""
-            best_model_path = os.path.join(self.model_folder, "best_model.pt")
+            best_model_path = os.path.join(self.model_folder, f"{prefix}best_model.pt")
             
             # Initialize fresh training state if no checkpoint
             if not os.path.exists(best_model_path):
@@ -308,7 +308,7 @@ class BaseTrainer:
         return average_loss, average_acc
     
     # Saving
-    def save_checkpoint(self, state: TrainingState, model: nn.Module, optimizer: optim.Optimizer, train_mean: float, train_std: float):
+    def save_checkpoint(self, state: TrainingState, model: nn.Module, optimizer: optim.Optimizer, train_mean: float, train_std: float, prefix: str = ""):
         """Save checkpoint at regular intervals"""
         losses = {
             'train_losses': state.train_loss_list,
@@ -318,7 +318,7 @@ class BaseTrainer:
         }
         normalization = {'mean': train_mean, 'std': train_std}
         
-        checkpoint_path = os.path.join(self.model_folder, f"checkpoint_epoch_{state.epoch+1}.pt")
+        checkpoint_path = os.path.join(self.model_folder, f"{prefix}checkpoint_epoch_{state.epoch+1}.pt")
         checkpoint_dict = {
             'model': model.state_dict(),
             'optimizer': optimizer.state_dict(),
@@ -328,12 +328,12 @@ class BaseTrainer:
         }
         torch.save(checkpoint_dict, checkpoint_path)
 
-    def save_final_models(self, state: TrainingState, model: nn.Module, optimizer: optim.Optimizer, train_mean: float, train_std: float):
+    def save_final_models(self, state: TrainingState, model: nn.Module, optimizer: optim.Optimizer, train_mean: float, train_std: float, prefix = ""):
         """Save best and final models"""
         normalization = {'mean': train_mean, 'std': train_std}
         
         # Save best model
-        best_model_path = os.path.join(self.model_folder, "best_model.pt")
+        best_model_path = os.path.join(self.model_folder, f"{prefix}best_model.pt")
         best_state_dict = {
             'model': state.best_model,
             'optimizer': state.best_optimizer,
@@ -345,7 +345,7 @@ class BaseTrainer:
         print(f"\nSaving best model from epoch {state.best_epoch} with accuracy {state.best_test_acc:.2f}%")
         
         # Save final model
-        final_model_path = os.path.join(self.model_folder, "final_model.pt")
+        final_model_path = os.path.join(self.model_folder, f"{prefix}final_model.pt")
         losses = {
             'train_losses': state.train_loss_list,
             'train_accuracies': state.train_accuracy_list,

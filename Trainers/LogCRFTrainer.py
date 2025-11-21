@@ -1,17 +1,20 @@
-import os, shutil, torch
-import torch.nn as nn
+import os, joblib, torch
+import numpy as np
 import torch.optim as optim
 from tqdm import tqdm
 from TorchCRF import CRF
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 from typing import Tuple
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
 
 from Utils.training_utils import accuracy_fn, adjusting_learning_rate
-from Akordio_Core.Classes.SongDataset import SongDataset
 from Trainers.BaseTrainer import BaseTrainer
 
-class CRFTrainer(BaseTrainer):
+class LogCRFTrainer(BaseTrainer):
+    """Trainer for CRF model using Logistic Regression as pre-model"""
+    
     def train(self):
         """Main training loop"""
         # Setup
@@ -21,29 +24,19 @@ class CRFTrainer(BaseTrainer):
         train_tensors, test_tensors = self.loader.load_data()
         train_dataloader, test_dataloader = self.create_dataloaders(train_tensors, test_tensors)
         
-        # Compute normalization
-        train_dataset = SongDataset(train_tensors, self.config)
+        # Load pre-trained logistic regression model and scaler
+        model_path = os.path.join(self.model_folder, "model.joblib")
+        loaded = joblib.load(model_path)
+        pre_model: LogisticRegression = loaded["model"]
+        scaler: StandardScaler = loaded["scaler"]
         
-        # Create and load model
-        pre_model = self.create_model()
-        model_path = os.path.join(self.model_folder, "best_model.pt")
-        loaded = torch.load(model_path, map_location=self.device)
-        pre_model.load_state_dict(loaded['model'])
-        normalization = loaded['normalization']
-        train_mean = normalization['mean']
-        train_std = normalization['std']
-
-        pre_model.eval()
-        for p in pre_model.parameters():
-            p.requires_grad = False
-
         # Initialize CRF
         crf = CRF(num_labels=self.config.train.model.output).to(self.device)
         optimizer = optim.Adam(crf.parameters(), lr=self.config.train.model.learning_rate)
-
+        
         # Load checkpoint if exists
-        state, train_mean, train_std = self.load_checkpoint_if_exists(crf, optimizer, train_mean, train_std, "crf_")
-
+        state, _, _ = self.load_checkpoint_if_exists(crf, optimizer, 0.0, 1.0, "crf_")
+        
         # Training parameters
         patience = self.config.train.model.loss_patience
         total_epochs = state.epoch + self.config.train.model.epoch_count
@@ -55,10 +48,14 @@ class CRFTrainer(BaseTrainer):
                 state.epoch = epoch
                 
                 # Train
-                train_loss, train_acc = self.train_epoch(crf, pre_model, train_dataloader, optimizer, train_mean, train_std)
+                train_loss, train_acc = self.train_epoch(
+                    crf, pre_model, scaler, train_dataloader, optimizer
+                )
                 
                 # Evaluate
-                test_loss, test_acc = self.evaluate_epoch(crf, pre_model, test_dataloader, train_mean, train_std)
+                test_loss, test_acc = self.evaluate_epoch(
+                    crf, pre_model, scaler, test_dataloader
+                )
                 
                 # Update state
                 state.train_loss_list.append(train_loss)
@@ -71,7 +68,7 @@ class CRFTrainer(BaseTrainer):
                 
                 # Checkpointing
                 if (epoch + 1) % self.config.train.checkpoint_interval == 0:
-                    self.save_checkpoint(state, crf, optimizer, train_mean, train_std, "crf_")
+                    self.save_checkpoint(state, crf, optimizer, 0.0, 1.0, "crf_")
                 
                 # Early stopping check
                 if test_acc > state.best_test_acc:
@@ -102,36 +99,46 @@ class CRFTrainer(BaseTrainer):
         except KeyboardInterrupt:
             print("Training interrupted by user!")
         finally:
-            self.save_final_models(state, crf, optimizer, train_mean, train_std, "crf_")
+            self.save_final_models(state, crf, optimizer, 0.0, 1.0, "crf_")
             self.plot_learning_curves(state)
-
-    def train_epoch(self, crf: CRF, pre_model: nn.Module, dataloader: DataLoader, optimizer: optim.Optimizer, train_mean: float, train_std: float) -> Tuple[float, float]:
+    
+    def train_epoch(self, crf: CRF, pre_model: LogisticRegression, scaler: StandardScaler, 
+                   dataloader: DataLoader, optimizer: optim.Optimizer) -> Tuple[float, float]:
         """Train for one epoch and return average loss and accuracy"""
         crf.train()
         losses = []
         accuracies = []
         
         for X_batch, y_batch in dataloader:
-            X_batch = X_batch.to(self.device)
+            # Convert to numpy for sklearn
+            X_batch = X_batch.detach().cpu().numpy().astype(np.float32)
             y_batch = y_batch.to(self.device)
             mask = (y_batch != self.config.train.model.padding_index).to(self.device)
             
-            # Normalization
-            X_batch = (X_batch - train_mean) / train_std
+            # Normalization with scaler
+            batch_size, seq_len, feat_dim = X_batch.shape
+            X_flat = X_batch.reshape(-1, feat_dim)
+            X_scaled = scaler.transform(X_flat)
+            X_batch = X_scaled.reshape(batch_size, seq_len, feat_dim)
             
-            # Forward pass
-            with torch.inference_mode():
-                logits = pre_model(X_batch)
-            preds = crf.viterbi_decode(logits, mask)
+            # Get logits from logistic regression
+            X_flat = X_batch.reshape(-1, feat_dim)
+            probs = pre_model.predict_proba(X_flat)
+            logits = torch.from_numpy(probs).float()
+            logits = torch.log(logits + 1e-8).view(batch_size, seq_len, -1).to(self.device)
+            
+            # Get predictions
+            preds = crf.viterbi_decode(logits, mask) # type: ignore
             
             # Convert to tensor and pad
             preds_tensor = [torch.tensor(p, device=self.device) for p in preds]
-            preds_padded = pad_sequence(preds_tensor, batch_first=True, padding_value=self.config.train.model.padding_index)
-
+            preds_padded = pad_sequence(preds_tensor, batch_first=True, 
+                                       padding_value=self.config.train.model.padding_index)
+            
             # Loss and accuracy
             log_likelihood = crf(logits, y_batch, mask)
             loss = -log_likelihood.mean()
-            
+
             acc = accuracy_fn(y_batch, preds_padded, self.config.train.model.padding_index)
             
             losses.append(loss.cpu().item())
@@ -141,13 +148,14 @@ class CRFTrainer(BaseTrainer):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
-        average_loss = sum(losses)/len(losses)
-        average_acc = sum(accuracies)/len(accuracies) 
+        
+        average_loss = sum(losses) / len(losses)
+        average_acc = sum(accuracies) / len(accuracies)
         
         return average_loss, average_acc
     
-    def evaluate_epoch(self, crf: CRF, pre_model: nn.Module, dataloader: DataLoader, train_mean: float, train_std: float) -> Tuple[float, float]:
+    def evaluate_epoch(self, crf: CRF, pre_model: LogisticRegression, scaler: StandardScaler,
+                      dataloader: DataLoader) -> Tuple[float, float]:
         """Evaluate model and return average loss and accuracy"""
         crf.eval()
         losses = []
@@ -155,32 +163,41 @@ class CRFTrainer(BaseTrainer):
         
         with torch.inference_mode():
             for X_batch, y_batch in dataloader:
-                X_batch = X_batch.to(self.device)
+                # Convert to numpy for sklearn
+                X_batch = X_batch.detach().cpu().numpy().astype(np.float32)
                 y_batch = y_batch.to(self.device)
                 mask = (y_batch != self.config.train.model.padding_index).to(self.device)
                 
-                # Normalization
-                X_batch = (X_batch - train_mean) / train_std
+                # Normalization with scaler
+                batch_size, seq_len, feat_dim = X_batch.shape
+                X_flat = X_batch.reshape(-1, feat_dim)
+                X_scaled = scaler.transform(X_flat)
+                X_batch = X_scaled.reshape(batch_size, seq_len, feat_dim)
                 
-                # Forward pass
-                logits = pre_model(X_batch)
-
-                #Loss and accuracy
+                # Get logits from logistic regression
+                X_flat = X_batch.reshape(-1, feat_dim)
+                probs = pre_model.predict_proba(X_flat)
+                logits = torch.from_numpy(probs).float()
+                logits = torch.log(logits + 1e-8).view(batch_size, seq_len, -1).to(self.device)
+                
+                # Loss
                 log_likelihood = crf(logits, y_batch, mask)
                 loss = -log_likelihood.mean()
-
-                preds = crf.viterbi_decode(logits, mask)
+                
+                # Get predictions
+                preds = crf.viterbi_decode(logits, mask) # type: ignore
                 
                 # Convert to tensor and pad
                 preds_tensor = [torch.tensor(p, device=self.device) for p in preds]
-                preds_padded = pad_sequence(preds_tensor, batch_first=True, padding_value=self.config.train.model.padding_index)
+                preds_padded = pad_sequence(preds_tensor, batch_first=True,
+                                           padding_value=self.config.train.model.padding_index)
                 
                 acc = accuracy_fn(y_batch, preds_padded, self.config.train.model.padding_index)
                 
                 losses.append(loss.cpu().item())
                 accuracies.append(acc)
         
-        average_loss = sum(losses)/len(losses)
-        average_acc = sum(accuracies)/len(accuracies) 
-
+        average_loss = sum(losses) / len(losses)
+        average_acc = sum(accuracies) / len(accuracies)
+        
         return average_loss, average_acc
