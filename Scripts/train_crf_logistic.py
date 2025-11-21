@@ -3,11 +3,11 @@ import numpy as np
 import torch.optim as optim
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from Akordio_Core.net_config import Config, load_config
-from Akordio_Core.song_dataset import SongDataset, make_collate_fn
+from Akordio_Core.Classes.NetConfig import Config, load_config
+from Akordio_Core.Classes.SongDataset import SongDataset, make_collate_fn
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
-from Akordio_Core.chords import Chords, Complexity
+from Akordio_Core.Tools.Chords import Chords, Complexity
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from TorchCRF import CRF

@@ -3,10 +3,10 @@ base:
 data:
   dataset_dir: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Datasets"
   datasets: [Beatles, Uspop2000, CaroleKing, Queen, RobbieWilliams]
-  preprocessed_dir: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/BaseDataset"
+  preprocessed_dir: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/PCPDataset"
   preprocess:
     pcp:
-      enabled: False # whether to use pcp or log CQT
+      enabled: True # whether to use pcp or log CQT
       bins: 12 # frequency resolution of CQT (bin for each semitone)
       octaves: 6 # number of octaves (separately specified for chroma)
     num_splits: 5 # number of k-fold folds
@@ -19,10 +19,10 @@ data:
     pitch_shift_end: 5 # highest pitch shift
     sampling_rate: 22050 # sampling rate
 train: # used for both training a evaluating
-  data_source: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/BaseDataset"
+  data_source: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/PCPDataset"
   model_path: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Models"
-  model_name: "cr1_144_majmin"
-  test_fold: 1 # which fold to use as test set
+  model_name: "pcp_log_majmin"
+  test_fold: 3 # which fold to use as test set
   model_type: "CR1" # CR1/SimpleLSTM/BTC...
   model_complexity: "majmin" # which type of chords to train (majmin/majmin7/complex)
   checkpoint_interval: 10

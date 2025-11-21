@@ -3,8 +3,8 @@ import numpy as np
 import torch.optim as optim
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from Akordio_Core.net_config import Config, load_config
-from Akordio_Core.song_dataset import SongDataset, make_collate_fn
+from Akordio_Core.Classes.NetConfig import Config, load_config
+from Akordio_Core.Classes.SongDataset import SongDataset, make_collate_fn
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 from Neural_Nets.CNN import Model as CNN
@@ -13,7 +13,7 @@ from Neural_Nets.CR1 import Model as CR1
 from Neural_Nets.CR2 import Model as CR2
 from Neural_Nets.SimpleLSTM import Model as SimpleLSTM
 from Neural_Nets.BTC import Model as BTC
-from Akordio_Core.chords import Chords, Complexity
+from Akordio_Core.Tools.Chords import Chords, Complexity
 from TorchCRF import CRF
 
 def accuracy_fn(y_real, y_pred, padding_index):

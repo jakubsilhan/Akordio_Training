@@ -1,5 +1,5 @@
 import torch
-from Akordio_Core.net_config import Config
+from Akordio_Core.Classes.NetConfig import Config
 import torch.nn as nn
 
 """Based on https://ieeexplore.ieee.org/document/7738895"""

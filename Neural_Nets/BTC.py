@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import math
 
-from Akordio_Core.net_config import Config
+from Akordio_Core.Classes.NetConfig import Config
 
 """Based on https://arxiv.org/pdf/1907.02698"""
 

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from Akordio_Core.net_config import Config
+from Akordio_Core.Classes.NetConfig import Config
 
 """Based on https://ieeexplore.ieee.org/document/9399463"""
 
