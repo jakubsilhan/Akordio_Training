@@ -93,6 +93,7 @@ class BaseTrainer:
             
             # Initialize fresh training state if no checkpoint
             if not os.path.exists(best_model_path):
+                print("Failed to find best saved model!")
                 state = TrainingState(
                     epoch=0,
                     best_epoch=0,
@@ -205,7 +206,7 @@ class BaseTrainer:
                 if (epoch + 1) % self.config.train.checkpoint_interval == 0:
                     self.save_checkpoint(state, model, optimizer, train_mean, train_std)
                 
-                # Early stopping check
+                # Best model evaluation
                 if test_acc > state.best_test_acc:
                     state.best_test_acc = test_acc
                     state.best_model = model.state_dict()
@@ -222,6 +223,7 @@ class BaseTrainer:
                 else:
                     state.epochs_no_improve += 1
                 
+                # Early stopping check 
                 if state.epochs_no_improve >= patience:
                     print(f"Early stopping at epoch {epoch+1}, test accuracy has not improved for {patience} epochs.\n")
                     break
