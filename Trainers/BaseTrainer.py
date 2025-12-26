@@ -90,7 +90,7 @@ class BaseTrainer:
     def load_checkpoint_if_exists(self, model: nn.Module, optimizer: optim.Optimizer, train_mean: float, train_std: float, prefix = "") -> Tuple[TrainingState, float, float]:
             """Load checkpoint if it exists, otherwise return fresh training state"""
             best_model_path = os.path.join(self.model_folder, f"{prefix}best_model.pt")
-            
+            # final_model_path = os.path.join(self.model_folder, f"{prefix}final_model.pt")
             # Initialize fresh training state if no checkpoint
             if not os.path.exists(best_model_path):
                 print("Failed to find best saved model!")

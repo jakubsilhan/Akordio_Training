@@ -19,7 +19,7 @@ class Model(nn.Module):
         # Activation
         self.relu = nn.ReLU(inplace=True)
         
-        # Batchnorm and dropout
+        # Batchnorm
         self.batch_norm = nn.BatchNorm2d(1)
 
         # Convolutional layer

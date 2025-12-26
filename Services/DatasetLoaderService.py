@@ -33,7 +33,7 @@ class DatasetLoaderService:
         train_tensors = []
         # TODO add the check for missing dataset and folds here
         for fold in tqdm(os.listdir(self.config.train.data_source), desc="Loading train folds"):
-            if fold == "config.yaml" or fold == str(self.config.train.test_fold - 1): # Skip dataset config and training fold
+            if fold == "config.yaml" or fold == str(self.config.train.test_fold): # Skip dataset config and training fold
                 continue
             
             fold_dir = os.path.join(self.config.train.data_source, fold)
@@ -46,7 +46,7 @@ class DatasetLoaderService:
         test_tensors = []
         test_fold_path = os.path.join(
             self.config.train.data_source, 
-            str(self.config.train.test_fold - 1)
+            str(self.config.train.test_fold)
         )
         
         for fragment in tqdm(os.listdir(test_fold_path), desc="Loading test fold"):

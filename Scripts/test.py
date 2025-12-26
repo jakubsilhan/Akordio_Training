@@ -34,7 +34,7 @@ def test(config: Config):
 
     # Loading data
     fragments = list()
-    test_fold_path = os.path.join(config.train.data_source, str(config.train.test_fold - 1))
+    test_fold_path = os.path.join(config.train.data_source, str(config.train.test_fold))
     for fragment in tqdm(os.listdir(test_fold_path), desc="Loading test fold"):
         if not fragment.endswith(".npz"):
             continue
