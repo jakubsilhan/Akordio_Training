@@ -23,13 +23,13 @@ class DatasetLoaderService:
                 return Complexity.MAJMIN
 
     def load_data(self) -> Tuple[List[Tuple[torch.Tensor, torch.Tensor]], List[Tuple[torch.Tensor, torch.Tensor]]]:
-        """Load train and test data tensors"""
+        """Load train and valid data tensors"""
         train_tensors = self._load_train_data()
-        test_tensors = self._load_test_data()
-        return train_tensors, test_tensors
+        valid_tensors = self._load_valid_data()
+        return train_tensors, valid_tensors
     
     def _load_train_data(self) -> List[Tuple[torch.Tensor, torch.Tensor]]:
-        """Load training data from all folds except test fold"""
+        """Load training data from all folds except valid fold"""
         train_tensors = []
         # TODO add the check for missing dataset and folds here
         for fold in tqdm(os.listdir(self.config.train.data_source), desc="Loading train folds"):
@@ -41,24 +41,24 @@ class DatasetLoaderService:
         
         return train_tensors
     
-    def _load_test_data(self) -> List[Tuple[torch.Tensor, torch.Tensor]]:
-        """Load test data from test fold"""
-        test_tensors = []
-        test_fold_path = os.path.join(
+    def _load_valid_data(self) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+        """Load valid data from valid fold"""
+        valid_tensors = []
+        valid_fold_path = os.path.join(
             self.config.train.data_source, 
             str(self.config.train.test_fold)
         )
         
-        for fragment in tqdm(os.listdir(test_fold_path), desc="Loading test fold"):
-            if not fragment.endswith(".npz") or "_shift00_" not in fragment: # Skip augmented data for testing
+        for fragment in tqdm(os.listdir(valid_fold_path), desc="Loading valid fold"):
+            if not fragment.endswith(".npz") or "_shift00_" not in fragment: # Skip augmented data for validating
                 continue
             
-            fragment_path = os.path.join(test_fold_path, fragment)
+            fragment_path = os.path.join(valid_fold_path, fragment)
             tensor_pair = self._load_fragment(fragment_path)
             if tensor_pair:
-                test_tensors.append(tensor_pair)
+                valid_tensors.append(tensor_pair)
         
-        return test_tensors
+        return valid_tensors
     
     def _load_fold(self, fold_dir: str) -> List[Tuple[torch.Tensor, torch.Tensor]]:
         """Load all fragments from a fold directory"""

@@ -22,13 +22,13 @@ class TrainingState:
     """Holds the current state of training"""
     epoch: int
     best_epoch: int
-    best_test_acc: float
+    best_valid_acc: float
     epochs_no_improve: int
     before_acc: float
     train_loss_list: List[float]
     train_accuracy_list: List[float]
-    test_loss_list: List[float]
-    test_accuracy_list: List[float]
+    valid_loss_list: List[float]
+    valid_accuracy_list: List[float]
     best_model: Dict
     best_optimizer: Dict
     best_losses: Dict
@@ -44,10 +44,10 @@ class BaseTrainer:
             str(config.train.test_fold)
         )
     
-    def create_dataloaders(self, train_tensors, test_tensors) -> Tuple[DataLoader, DataLoader]:
-        """Create train and test dataloaders"""
+    def create_dataloaders(self, train_tensors, valid_tensors) -> Tuple[DataLoader, DataLoader]:
+        """Create train and valid dataloaders"""
         train_dataset = SongDataset(train_tensors, self.config)
-        test_dataset = SongDataset(test_tensors, self.config)
+        valid_dataset = SongDataset(valid_tensors, self.config)
         
         collate_fn = make_collate_fn(self.config.train.model.padding_index)
         
@@ -57,14 +57,14 @@ class BaseTrainer:
             shuffle=True, 
             collate_fn=collate_fn
         )
-        test_dataloader = DataLoader(
-            test_dataset, 
+        valid_dataloader = DataLoader(
+            valid_dataset, 
             batch_size=self.config.train.model.batch_size, 
             shuffle=False, 
             collate_fn=collate_fn
         )
         
-        return train_dataloader, test_dataloader
+        return train_dataloader, valid_dataloader
     
     # Initializations
     def create_model(self) -> nn.Module:
@@ -97,20 +97,20 @@ class BaseTrainer:
                 state = TrainingState(
                     epoch=0,
                     best_epoch=0,
-                    best_test_acc=0.0,
+                    best_valid_acc=0.0,
                     epochs_no_improve=0,
                     before_acc=float('-inf'),
                     train_loss_list=[],
                     train_accuracy_list=[],
-                    test_loss_list=[],
-                    test_accuracy_list=[],
+                    valid_loss_list=[],
+                    valid_accuracy_list=[],
                     best_model=model.state_dict(),
                     best_optimizer=optimizer.state_dict(),
                     best_losses={
                         'train_losses': [],
                         'train_accuracies': [],
-                        'test_losses': [],
-                        'test_accuracies': []
+                        'valid_losses': [],
+                        'valid_accuracies': []
                     }
                 )
                 return state, train_mean, train_std
@@ -130,13 +130,13 @@ class BaseTrainer:
             state = TrainingState(
                 epoch=start_epoch,
                 best_epoch=start_epoch - 1,
-                best_test_acc=0.0,
+                best_valid_acc=0.0,
                 epochs_no_improve=0,
                 before_acc=float('-inf'),
                 train_loss_list=prev_losses.get('train_losses', []),
                 train_accuracy_list=prev_losses.get('train_accuracies', []),
-                test_loss_list=prev_losses.get('test_losses', []),
-                test_accuracy_list=prev_losses.get('test_accuracies', []),
+                valid_loss_list=prev_losses.get('valid_losses', []),
+                valid_accuracy_list=prev_losses.get('valid_accuracies', []),
                 best_model=model.state_dict(),
                 best_optimizer=optimizer.state_dict(),
                 best_losses=prev_losses
@@ -158,8 +158,8 @@ class BaseTrainer:
         torch.manual_seed(self.config.base.random_seed)
         
         # Load data
-        train_tensors, test_tensors = self.loader.load_data()
-        train_dataloader, test_dataloader = self.create_dataloaders(train_tensors, test_tensors)
+        train_tensors, valid_tensors = self.loader.load_data()
+        train_dataloader, valid_dataloader = self.create_dataloaders(train_tensors, valid_tensors)
         
         # Compute normalization
         train_dataset = SongDataset(train_tensors, self.config)
@@ -189,49 +189,49 @@ class BaseTrainer:
                 )
                 
                 # Evaluate
-                test_loss, test_acc = self.evaluate_epoch(
-                    model, test_dataloader, loss_fn, train_mean, train_std
+                valid_loss, valid_acc = self.evaluate_epoch(
+                    model, valid_dataloader, loss_fn, train_mean, train_std
                 )
                 
                 # Update state
                 state.train_loss_list.append(train_loss)
                 state.train_accuracy_list.append(train_acc)
-                state.test_loss_list.append(test_loss)
-                state.test_accuracy_list.append(test_acc)
+                state.valid_loss_list.append(valid_loss)
+                state.valid_accuracy_list.append(valid_acc)
                 
                 # Log progress
-                tqdm.write(f"Epoch: {epoch} | Loss: {train_loss:.5f}, Acc: {train_acc:.2f}% | Test Loss: {test_loss:.5f}, Test Acc: {test_acc:.2f}%\n")
+                tqdm.write(f"Epoch: {epoch} | Loss: {train_loss:.5f}, Acc: {train_acc:.2f}% | valid Loss: {valid_loss:.5f}, valid Acc: {valid_acc:.2f}%\n")
                 
                 # Checkpointing
                 if (epoch + 1) % self.config.train.checkpoint_interval == 0:
                     self.save_checkpoint(state, model, optimizer, train_mean, train_std)
                 
                 # Best model evaluation
-                if test_acc > state.best_test_acc:
-                    state.best_test_acc = test_acc
+                if valid_acc > state.best_valid_acc:
+                    state.best_valid_acc = valid_acc
                     state.best_model = model.state_dict()
                     state.best_optimizer = optimizer.state_dict()
                     state.best_epoch = epoch
                     state.best_losses = {
                         'train_losses': state.train_loss_list.copy(),
                         'train_accuracies': state.train_accuracy_list.copy(),
-                        'test_losses': state.test_loss_list.copy(),
-                        'test_accuracies': state.test_accuracy_list.copy()
+                        'valid_losses': state.valid_loss_list.copy(),
+                        'valid_accuracies': state.valid_accuracy_list.copy()
                     }
                     state.epochs_no_improve = 0
-                    print(f"New best model with acc: {state.best_test_acc:.2f}% at epoch: {state.best_epoch}\n")
+                    print(f"New best model with acc: {state.best_valid_acc:.2f}% at epoch: {state.best_epoch}\n")
                 else:
                     state.epochs_no_improve += 1
                 
                 # Early stopping check 
                 if state.epochs_no_improve >= patience:
-                    print(f"Early stopping at epoch {epoch+1}, test accuracy has not improved for {patience} epochs.\n")
+                    print(f"Early stopping at epoch {epoch+1}, valid accuracy has not improved for {patience} epochs.\n")
                     break
                 
                 # Adjust learning rate
-                if state.before_acc > test_acc:
+                if state.before_acc > valid_acc:
                     adjusting_learning_rate(optimizer, factor=0.95, min_lr=5e-6)
-                state.before_acc = test_acc
+                state.before_acc = valid_acc
                 
         except KeyboardInterrupt:
             print("Training interrupted by user!")
@@ -315,8 +315,8 @@ class BaseTrainer:
         losses = {
             'train_losses': state.train_loss_list,
             'train_accuracies': state.train_accuracy_list,
-            'test_losses': state.test_loss_list,
-            'test_accuracies': state.test_accuracy_list
+            'valid_losses': state.valid_loss_list,
+            'valid_accuracies': state.valid_accuracy_list
         }
         normalization = {'mean': train_mean, 'std': train_std}
         
@@ -344,15 +344,15 @@ class BaseTrainer:
             'normalization': normalization
         }
         torch.save(best_state_dict, best_model_path)
-        print(f"\nSaving best model from epoch {state.best_epoch} with accuracy {state.best_test_acc:.2f}%")
+        print(f"\nSaving best model from epoch {state.best_epoch} with accuracy {state.best_valid_acc:.2f}%")
         
         # Save final model
         final_model_path = os.path.join(self.model_folder, f"{prefix}final_model.pt")
         losses = {
             'train_losses': state.train_loss_list,
             'train_accuracies': state.train_accuracy_list,
-            'test_losses': state.test_loss_list,
-            'test_accuracies': state.test_accuracy_list
+            'valid_losses': state.valid_loss_list,
+            'valid_accuracies': state.valid_accuracy_list
         }
         final_state_dict = {
             'model': model.state_dict(),
@@ -370,7 +370,7 @@ class BaseTrainer:
         # Plot Loss
         plt.subplot(1, 2, 1)
         plt.plot(state.train_loss_list, label="Train Loss")
-        plt.plot(state.test_loss_list, label="Test Loss")
+        plt.plot(state.valid_loss_list, label="valid Loss")
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
         plt.title("Loss Curve")
@@ -379,7 +379,7 @@ class BaseTrainer:
         # Plot Accuracy
         plt.subplot(1, 2, 2)
         plt.plot(state.train_accuracy_list, label="Train Accuracy")
-        plt.plot(state.test_accuracy_list, label="Test Accuracy")
+        plt.plot(state.valid_accuracy_list, label="valid Accuracy")
         plt.xlabel("Epoch")
         plt.ylabel("Accuracy (%)")
         plt.title("Accuracy Curve")

@@ -28,25 +28,20 @@ class LogisticTrainer:
         shutil.copy2("config.yaml", self.model_folder)
 
         # Load data
-        train_tensors, test_tensors = self.loader.load_data()
+        train_tensors, valid_tensors = self.loader.load_data()
 
         train_x_list, train_y_list = zip(*train_tensors)
         train_X = np.concatenate(train_x_list, axis=0)
         train_y = np.concatenate(train_y_list, axis=0)
 
-        test_x_list, test_y_list = zip(*test_tensors)
-        test_X = np.concatenate(test_x_list, axis=0)
-        test_y = np.concatenate(test_y_list, axis=0)
-
-        # train_X = np.array(train_X, dtype=np.float32)
-        # train_y = np.array(train_y, dtype=np.int64)
-        # test_X = np.array(test_X, dtype=np.float32)
-        # test_y = np.array(test_y, dtype=np.int64)
+        valid_x_list, valid_y_list = zip(*valid_tensors)
+        valid_X = np.concatenate(valid_x_list, axis=0)
+        valid_y = np.concatenate(valid_y_list, axis=0)
 
         # Normalization
         scaler = StandardScaler()
         train_X = scaler.fit_transform(train_X)
-        test_X = scaler.transform(test_X)
+        valid_X = scaler.transform(valid_X)
 
         # Model
         clf = LogisticRegression(
@@ -60,10 +55,10 @@ class LogisticTrainer:
         clf.fit(train_X, train_y)
 
         # Validation
-        preds = clf.predict(test_X)
+        preds = clf.predict(valid_X)
 
         # Accuracy
-        acc = accuracy_fn(test_y, preds)
+        acc = accuracy_fn(valid_y, preds)
 
         # Logging
         print(f"Logistic Regression Accuracy: {acc}")
