@@ -1,4 +1,4 @@
-import os, joblib, torch
+import os, joblib, torch, time
 import numpy as np
 import torch.optim as optim
 from tqdm import tqdm
@@ -41,6 +41,8 @@ class LogCRFTrainer(BaseTrainer):
         patience = self.config.train.model.loss_patience
         total_epochs = state.epoch + self.config.train.model.epoch_count
         
+        start_time = time.time()
+
         try:
             pbar = tqdm(range(state.epoch, total_epochs), desc="Training Progress")
             
@@ -68,7 +70,8 @@ class LogCRFTrainer(BaseTrainer):
                 
                 # Checkpointing
                 if (epoch + 1) % self.config.train.checkpoint_interval == 0:
-                    self.save_checkpoint(state, crf, optimizer, 0.0, 1.0, "crf_")
+                    checkpoint_time = time.time() - start_time
+                    self.save_checkpoint(state, crf, optimizer, 0.0, 1.0, checkpoint_time, "crf_")
                 
                 # Early stopping check
                 if valid_acc > state.best_valid_acc:
@@ -99,7 +102,8 @@ class LogCRFTrainer(BaseTrainer):
         except KeyboardInterrupt:
             print("Training interrupted by user!")
         finally:
-            self.save_final_models(state, crf, optimizer, 0.0, 1.0, "crf_")
+            total_time = time.time() - start_time
+            self.save_final_models(state, crf, optimizer, 0.0, 1.0, total_time, "crf_")
             self.plot_learning_curves(state)
     
     def train_epoch(self, crf: CRF, pre_model: LogisticRegression, scaler: StandardScaler, 

@@ -1,4 +1,4 @@
-import os, torch, shutil
+import os, torch, shutil, time
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
@@ -90,7 +90,6 @@ class BaseTrainer:
     def load_checkpoint_if_exists(self, model: nn.Module, optimizer: optim.Optimizer, train_mean: float, train_std: float, prefix = "") -> Tuple[TrainingState, float, float]:
             """Load checkpoint if it exists, otherwise return fresh training state"""
             best_model_path = os.path.join(self.model_folder, f"{prefix}best_model.pt")
-            # final_model_path = os.path.join(self.model_folder, f"{prefix}final_model.pt")
             # Initialize fresh training state if no checkpoint
             if not os.path.exists(best_model_path):
                 print("Failed to find best saved model!")
@@ -162,8 +161,7 @@ class BaseTrainer:
         train_dataloader, valid_dataloader = self.create_dataloaders(train_tensors, valid_tensors)
         
         # Compute normalization
-        train_dataset = SongDataset(train_tensors, self.config)
-        train_mean, train_std = compute_mean_std(train_dataset)
+        train_mean, train_std = compute_mean_std(train_dataloader)
         
         # Create model, loss, optimizer
         model = self.create_model()
@@ -177,6 +175,8 @@ class BaseTrainer:
         patience = self.config.train.model.loss_patience
         total_epochs = state.epoch + self.config.train.model.epoch_count
         
+        start_time = time.time()
+
         try:
             pbar = tqdm(range(state.epoch, total_epochs), desc="Training Progress")
             
@@ -204,7 +204,8 @@ class BaseTrainer:
                 
                 # Checkpointing
                 if (epoch + 1) % self.config.train.checkpoint_interval == 0:
-                    self.save_checkpoint(state, model, optimizer, train_mean, train_std)
+                    checkpoint_time = time.time() - start_time
+                    self.save_checkpoint(state, model, optimizer, train_mean, train_std, checkpoint_time)
                 
                 # Best model evaluation
                 if valid_acc > state.best_valid_acc:
@@ -236,7 +237,8 @@ class BaseTrainer:
         except KeyboardInterrupt:
             print("Training interrupted by user!")
         finally:
-            self.save_final_models(state, model, optimizer, train_mean, train_std)
+            total_time = time.time() - start_time
+            self.save_final_models(state, model, optimizer, train_mean, train_std, total_time)
             self.plot_learning_curves(state)
 
     def train_epoch(self, model: nn.Module, dataloader: DataLoader, loss_fn: nn.Module, optimizer: optim.Optimizer, train_mean: float, train_std: float) -> Tuple[float, float]:
@@ -271,8 +273,8 @@ class BaseTrainer:
             loss.backward()
             optimizer.step()
 
-            average_loss = sum(losses)/len(losses)
-            average_acc = sum(accuracies)/len(accuracies) 
+        average_loss = sum(losses)/len(losses)
+        average_acc = sum(accuracies)/len(accuracies) 
         
         return average_loss, average_acc
     
@@ -310,7 +312,7 @@ class BaseTrainer:
         return average_loss, average_acc
     
     # Saving
-    def save_checkpoint(self, state: TrainingState, model: nn.Module, optimizer: optim.Optimizer, train_mean: float, train_std: float, prefix: str = ""):
+    def save_checkpoint(self, state: TrainingState, model: nn.Module, optimizer: optim.Optimizer, train_mean: float, train_std: float, time: float, prefix: str = ""):
         """Save checkpoint at regular intervals"""
         losses = {
             'train_losses': state.train_loss_list,
@@ -326,11 +328,12 @@ class BaseTrainer:
             'optimizer': optimizer.state_dict(),
             'epoch': state.epoch,
             'loss': losses,
-            'normalization': normalization
+            'normalization': normalization,
+            'total_time': time
         }
         torch.save(checkpoint_dict, checkpoint_path)
 
-    def save_final_models(self, state: TrainingState, model: nn.Module, optimizer: optim.Optimizer, train_mean: float, train_std: float, prefix = ""):
+    def save_final_models(self, state: TrainingState, model: nn.Module, optimizer: optim.Optimizer, train_mean: float, train_std: float, time: float, prefix = ""):
         """Save best and final models"""
         normalization = {'mean': train_mean, 'std': train_std}
         
@@ -341,7 +344,8 @@ class BaseTrainer:
             'optimizer': state.best_optimizer,
             'epoch': state.best_epoch,
             'loss': state.best_losses,
-            'normalization': normalization
+            'normalization': normalization,
+            'total_time': time
         }
         torch.save(best_state_dict, best_model_path)
         print(f"\nSaving best model from epoch {state.best_epoch} with accuracy {state.best_valid_acc:.2f}%")
@@ -359,7 +363,8 @@ class BaseTrainer:
             'optimizer': optimizer.state_dict(),
             'epoch': state.epoch,
             'loss': losses,
-            'normalization': normalization
+            'normalization': normalization,
+            'total_time': time
         }
         torch.save(final_state_dict, final_model_path)
 
@@ -370,7 +375,7 @@ class BaseTrainer:
         # Plot Loss
         plt.subplot(1, 2, 1)
         plt.plot(state.train_loss_list, label="Train Loss")
-        plt.plot(state.valid_loss_list, label="valid Loss")
+        plt.plot(state.valid_loss_list, label="Valid Loss")
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
         plt.title("Loss Curve")
@@ -379,7 +384,7 @@ class BaseTrainer:
         # Plot Accuracy
         plt.subplot(1, 2, 2)
         plt.plot(state.train_accuracy_list, label="Train Accuracy")
-        plt.plot(state.valid_accuracy_list, label="valid Accuracy")
+        plt.plot(state.valid_accuracy_list, label="Valid Accuracy")
         plt.xlabel("Epoch")
         plt.ylabel("Accuracy (%)")
         plt.title("Accuracy Curve")

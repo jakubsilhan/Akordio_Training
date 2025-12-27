@@ -1,4 +1,4 @@
-import os, shutil, joblib
+import os, shutil, joblib, time
 import numpy as np
 
 from sklearn.linear_model import LogisticRegression
@@ -51,11 +51,12 @@ class LogisticTrainer:
             random_state=self.config.base.random_seed
         )
 
+        start_time = time.time()
         # Training
         clf.fit(train_X, train_y)
-
         # Validation
         preds = clf.predict(valid_X)
+        total_time = time.time() - start_time
 
         # Accuracy
         acc = accuracy_fn(valid_y, preds)
@@ -64,4 +65,4 @@ class LogisticTrainer:
         print(f"Logistic Regression Accuracy: {acc}")
 
         # Saving model
-        joblib.dump({"model": clf, "scaler": scaler}, os.path.join(self.model_folder,"model.joblib"))
+        joblib.dump({"model": clf, "scaler": scaler, "total_time": total_time}, os.path.join(self.model_folder,"model.joblib"))
