@@ -1,4 +1,4 @@
-import os, shutil, torch
+import os, shutil, torch, time
 import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
@@ -18,13 +18,10 @@ class CRFTrainer(BaseTrainer):
         torch.manual_seed(self.config.base.random_seed)
         
         # Load data
-        train_tensors, test_tensors = self.loader.load_data()
-        train_dataloader, test_dataloader = self.create_dataloaders(train_tensors, test_tensors)
+        train_paths, test_paths = self.loader.load_data_paths()
+        train_dataloader, test_dataloader = self.create_dataloaders(train_paths, test_paths)
         
-        # Compute normalization
-        train_dataset = SongDataset(train_tensors, self.config)
-        
-        # Create and load model
+        # Create and load model, normalization
         pre_model = self.create_model()
         model_path = os.path.join(self.model_folder, "best_model.pt")
         loaded = torch.load(model_path, map_location=self.device)
@@ -48,6 +45,7 @@ class CRFTrainer(BaseTrainer):
         patience = self.config.train.model.loss_patience
         total_epochs = state.epoch + self.config.train.model.epoch_count
         
+        start_time = time.time()
         try:
             pbar = tqdm(range(state.epoch, total_epochs), desc="Training Progress")
             
@@ -63,35 +61,36 @@ class CRFTrainer(BaseTrainer):
                 # Update state
                 state.train_loss_list.append(train_loss)
                 state.train_accuracy_list.append(train_acc)
-                state.test_loss_list.append(test_loss)
-                state.test_accuracy_list.append(test_acc)
+                state.valid_loss_list.append(test_loss)
+                state.valid_accuracy_list.append(test_acc)
                 
                 # Log progress
-                tqdm.write(f"Epoch: {epoch} | Loss: {train_loss:.5f}, Acc: {train_acc:.2f}% | Test Loss: {test_loss:.5f}, Test Acc: {test_acc:.2f}%\n")
+                tqdm.write(f"Epoch: {epoch} | Loss: {train_loss:.5f}, Acc: {train_acc:.2f}% | Valid Loss: {test_loss:.5f}, Valid Acc: {test_acc:.2f}%\n")
                 
                 # Checkpointing
                 if (epoch + 1) % self.config.train.checkpoint_interval == 0:
-                    self.save_checkpoint(state, crf, optimizer, train_mean, train_std, "crf_")
+                    checkpoint_time = time.time() - start_time
+                    self.save_checkpoint(state, crf, optimizer, train_mean, train_std, checkpoint_time, "crf_")
                 
                 # Early stopping check
-                if test_acc > state.best_test_acc:
-                    state.best_test_acc = test_acc
+                if test_acc > state.best_valid_acc:
+                    state.best_valid_acc = test_acc
                     state.best_model = crf.state_dict()
                     state.best_optimizer = optimizer.state_dict()
                     state.best_epoch = epoch
                     state.best_losses = {
                         'train_losses': state.train_loss_list.copy(),
                         'train_accuracies': state.train_accuracy_list.copy(),
-                        'test_losses': state.test_loss_list.copy(),
-                        'test_accuracies': state.test_accuracy_list.copy()
+                        'valid_losses': state.valid_loss_list.copy(),
+                        'valid_accuracies': state.valid_accuracy_list.copy()
                     }
                     state.epochs_no_improve = 0
-                    print(f"New best model with acc: {state.best_test_acc:.2f}% at epoch: {state.best_epoch}\n")
+                    print(f"New best model with acc: {state.best_valid_acc:.2f}% at epoch: {state.best_epoch}\n")
                 else:
                     state.epochs_no_improve += 1
                 
                 if state.epochs_no_improve >= patience:
-                    print(f"Early stopping at epoch {epoch+1}, test accuracy has not improved for {patience} epochs.\n")
+                    print(f"Early stopping at epoch {epoch+1}, validation accuracy has not improved for {patience} epochs.\n")
                     break
                 
                 # Adjust learning rate
@@ -102,7 +101,8 @@ class CRFTrainer(BaseTrainer):
         except KeyboardInterrupt:
             print("Training interrupted by user!")
         finally:
-            self.save_final_models(state, crf, optimizer, train_mean, train_std, "crf_")
+            total_time = time.time() - start_time
+            self.save_final_models(state, crf, optimizer, train_mean, train_std, total_time, "crf_")
             self.plot_learning_curves(state)
 
     def train_epoch(self, crf: CRF, pre_model: nn.Module, dataloader: DataLoader, optimizer: optim.Optimizer, train_mean: float, train_std: float) -> Tuple[float, float]:

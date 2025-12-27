@@ -1,4 +1,5 @@
-import torch
+import torch, math
+from torch.utils.data import DataLoader
 
 def accuracy_fn(y_real, y_pred, padding_index):
     # Flatten inputs 
@@ -13,11 +14,23 @@ def accuracy_fn(y_real, y_pred, padding_index):
     acc = (correct / total) * 100 if total > 0 else 0.0
     return acc
 
-def compute_mean_std(dataset):
-    # Concatenate all tensors
-    all_data = torch.cat([X for X, _ in dataset], dim=0)  # total_frames, feature_dim
-    mean = all_data.mean().item()
-    std = all_data.std().item()
+def compute_mean_std(dataloader: DataLoader):
+    sum = 0.0
+    sum_sq = 0.0
+    total_elements = 0
+
+    for X, _ in dataloader:
+        # Flatten batch
+        X = X.view(-1) 
+        
+        sum += torch.sum(X).item()
+        sum_sq += torch.sum(X**2).item()
+        total_elements += X.numel()
+
+    mean = sum / total_elements # mean
+    var = (sum_sq / total_elements) - (math.pow(mean, 2)) # variance
+    std = math.sqrt(var) # standard deviation
+
     return mean, std
 
 def adjusting_learning_rate(optimizer, factor=.5, min_lr=0.00001):

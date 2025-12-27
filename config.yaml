@@ -3,7 +3,7 @@ base:
 data:
   dataset_dir: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Datasets"
   datasets: [Beatles, Uspop2000, CaroleKing, Queen, RobbieWilliams]
-  preprocessed_dir: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/BaseDataset"
+  preprocessed_dir: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/BaseDatasetSpecial"
   preprocess:
     pcp:
       enabled: False # whether to use pcp or log CQT
@@ -19,25 +19,25 @@ data:
     pitch_shift_end: 5 # highest pitch shift
     sampling_rate: 22050 # sampling rate
 train: # used for both training a evaluating
-  data_source: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/BaseDataset"
+  data_source: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/BaseDatasetSpecial"
   model_path: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Models"
-  model_name: "btc_144_complex"
-  test_fold: 1 # which fold to use as test set
-  model_type: "BTC" # CR1/CR2/SimpleLSTM/BTC/CNN/FifthNet...
-  model_complexity: "complex" # which type of chords to train (majmin/majmin7/complex)
+  model_name: "cr1_144_majmin_special"
+  test_fold: 0 # which fold to use as test set
+  model_type: "CR1" # CR1/SimpleLSTM/BTC...
+  model_complexity: "majmin" # which type of chords to train (majmin/majmin7/complex)
   checkpoint_interval: 10
   model:
     batch_size: 128
     input: 144 # feature size 144/216
-    output: 170 # output size (number of chords 25/61/170)
+    output: 25 # output size (number of chords 25/61/170)
     hidden: [256] # hidden size (depends on a model) 128/256
-    dropout: [0.2, 0.2, 0.2, 0.2] # dropout (depends on a model)
+    dropout: [0.4, 0, 0] # dropout (depends on a model)
     layers: 1 # number of layers
     bidirectional: True
     padding_index: -1
     epoch_count: 100
     loss_patience: 10
-    learning_rate: 1e-5
+    learning_rate: 1e-4
     weight_decay: 1e-5
     scheduler_step: 100
     scheduler_gamma: 0.1
