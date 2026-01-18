@@ -4,7 +4,10 @@ import torch.nn.functional as F
 
 from Akordio_Core.Classes.NetConfig import Config
 
-"""Based on https://ieeexplore.ieee.org/document/9399463"""
+"""Based on https://ieeexplore.ieee.org/document/9399463
+
+!!! NOT FUNCTIONAL AT THE MOMENT!!!
+"""
 
 class Model(nn.Module):
     def __init__(self, config: Config, device):

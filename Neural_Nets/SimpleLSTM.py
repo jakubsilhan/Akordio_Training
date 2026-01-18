@@ -4,7 +4,10 @@ import torch.nn.functional as F
 
 from Akordio_Core.Classes.NetConfig import Config
 
-"""Created as a baseline model"""
+"""Created as a baseline model
+
+!!! NOT FUNCTIONAL AT THE MOMENT!!!
+"""
 
 class Model(nn.Module):
     def __init__(self, config: Config, device):

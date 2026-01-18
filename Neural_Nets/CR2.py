@@ -29,10 +29,12 @@ class Model(nn.Module):
         # Recurrent layers
         self.gru = nn.GRU(input_size=36, hidden_size=self.hidden_size, num_layers=self.num_layers, batch_first=True, bidirectional=self.bidirectional)
 
-        self.decoder_gru = nn.GRU(input=self.hidden_size*self.num_directions, hidden_size=self.hidden_size, num_layers=self.num_layers, batch_first=True, bidirectional=self.bidirectional)
+        self.decoder_gru = nn.GRU(input_size=self.hidden_size*self.num_directions, hidden_size=self.hidden_size, num_layers=self.num_layers, batch_first=True, bidirectional=self.bidirectional)
 
         # Output
         self.fc = nn.Linear(self.hidden_size*self.num_directions, self.output_features)
+        self.fc_root = nn.Linear(self.hidden_size * self.num_directions, 13)
+        self.fc_quality = nn.Linear(self.hidden_size * self.num_directions, 15)
 
     def forward(self, x):
         # [batch_size, timestep,feature_size]
@@ -45,6 +47,23 @@ class Model(nn.Module):
 
         h0 = torch.zeros(self.num_layers * self.num_directions, conv.size(0), self.hidden_size).to(self.device)
         gru, h = self.gru(conv, h0)
-        gru, _ = self.gru(gru)
+        gru, _ = self.decoder_gru(gru)
         logits = self.fc(gru)
         return logits
+    
+    def forward_multiclass(self, x):
+        # [batch_size, timestep,feature_size]
+        x = x.unsqueeze(1) # [batch_size, num_channels=1, timestep, feature_size]
+        x = self.batch_norm(x)
+
+        conv = self.relu(self.conv1(x))
+        conv = self.relu(self.conv2(conv)) # [batch, out_feature_maps=out_channels, in_feature]
+        conv = conv.squeeze(3).permute(0,2,1) # [batch, timestep, feature]
+
+        h0 = torch.zeros(self.num_layers * self.num_directions, conv.size(0), self.hidden_size).to(self.device)
+        gru, h = self.gru(conv, h0)
+        gru, _ = self.decoder_gru(gru)
+        logits = self.fc(gru)
+        root_logits = self.fc_root(gru)
+        quality_logits = self.fc_quality(gru)
+        return logits, root_logits, quality_logits

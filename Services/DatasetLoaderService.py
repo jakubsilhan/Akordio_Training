@@ -22,8 +22,9 @@ class DatasetLoaderService:
             case _:
                 return Complexity.MAJMIN
 
-    def load_data(self) -> Tuple[List[Tuple[torch.Tensor, torch.Tensor]], List[Tuple[torch.Tensor, torch.Tensor]]]:
+    def load_data(self, multitask: bool = False) -> Tuple[List[Tuple[torch.Tensor, torch.Tensor]], List[Tuple[torch.Tensor, torch.Tensor]]]:
         """Load train and valid data tensors"""
+        self.multitask = multitask
         train_tensors = self._load_train_data()
         valid_tensors = self._load_valid_data()
         return train_tensors, valid_tensors
@@ -79,11 +80,17 @@ class DatasetLoaderService:
         data = np.load(fragment_path)
         X = data["X"]
         y_raw = data["y"]
-        
-        y = [self.chord_tool.encode(
-            chord=self.chord_tool.reduce(chord, self.complexity), 
-            type=self.complexity
-        ) for chord in y_raw]
+
+        if self.multitask:
+            y = [self.chord_tool.encode_multi(
+                chord=self.chord_tool.reduce(chord, self.complexity),
+                type=self.complexity
+            ) for chord in y_raw]
+        else:
+            y = [self.chord_tool.encode(
+                chord=self.chord_tool.reduce(chord, self.complexity), 
+                type=self.complexity
+            ) for chord in y_raw]
         
         X_tensor = torch.tensor(X, dtype=torch.float64)
         y_tensor = torch.tensor(y, dtype=torch.long)

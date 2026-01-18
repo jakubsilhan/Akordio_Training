@@ -29,13 +29,23 @@ class Model(nn.Module):
                   config.train.model.dropout[3]) # relu dropout
 
         self.self_attn_layers = BiDirectionalSelfAttentionLayers(*params)
-        self.output_projection = nn.Linear(config.train.model.hidden[0], config.train.model.output)
+        self.fc = nn.Linear(config.train.model.hidden[0], config.train.model.output)
+        self.fc_root = nn.Linear(config.train.model.hidden[0], 13)
+        self.fc_quality = nn.Linear(config.train.model.hidden[0], 15)
 
     def forward(self, x):
         # Output of Bi-directional Self-attention Layers
         self_attn_output, weights_list = self.self_attn_layers(x)
-        logits = self.output_projection(self_attn_output)
+        logits = self.fc(self_attn_output)
         return logits
+    
+    def forward_multiclass(self, x):
+        # Output of Bi-directional Self-attention Layers
+        self_attn_output, weights_list = self.self_attn_layers(x)
+        logits = self.fc(self_attn_output)
+        root_logits = self.fc_root(self_attn_output)
+        quality_logits = self.fc_quality(self_attn_output)
+        return logits, root_logits, quality_logits
 
 # Transformer modules
 class BiDirectionalSelfAttentionLayers(nn.Module):
