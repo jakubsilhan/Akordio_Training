@@ -7,6 +7,9 @@ from Akordio_Core.Classes.NetConfig import Config
 from Akordio_Core.Tools.Chords import Chords, Complexity
 
 class DatasetLoaderService:
+    """
+    Data loading class for model training purposes
+    """
     def __init__(self, config: Config):
         self.config = config
         self.chord_tool = Chords()
@@ -21,6 +24,12 @@ class DatasetLoaderService:
                 return Complexity.MAJMIN7
             case _:
                 return Complexity.MAJMIN
+
+    def load_test_data(self, multitask: bool = False) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+        """Load only test data tensors"""
+        self.multitask = multitask
+        valid_tensors = self._load_valid_data()
+        return valid_tensors
 
     def load_data(self, multitask: bool = False) -> Tuple[List[Tuple[torch.Tensor, torch.Tensor]], List[Tuple[torch.Tensor, torch.Tensor]]]:
         """Load train and valid data tensors"""

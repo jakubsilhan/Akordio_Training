@@ -13,6 +13,9 @@ W_ROOT=1.0
 W_QUALITY=1.0
 
 class MultiTrainer(BaseTrainer):
+    """
+    Training class for basic PyTorch chord recognition models utilizing multitask training
+    """
     def train(self):
         """Main training loop"""
         # Setup

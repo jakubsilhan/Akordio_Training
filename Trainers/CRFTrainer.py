@@ -12,6 +12,9 @@ from Akordio_Core.Classes.SongDataset import SongDataset
 from Trainers.BaseTrainer import BaseTrainer
 
 class CRFTrainer(BaseTrainer):
+    """
+    Training class TorchCRF model used with a PyTorch chord recognition model
+    """
     def train(self):
         """Main training loop"""
         # Setup

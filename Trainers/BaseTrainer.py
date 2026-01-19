@@ -34,6 +34,9 @@ class TrainingState:
     best_losses: Dict
 
 class BaseTrainer:
+    """
+    Training class for basic PyTorch chord recognition models
+    """
     def __init__(self, config: Config):
         self.config = config
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
