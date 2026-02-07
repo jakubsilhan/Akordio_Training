@@ -39,7 +39,7 @@ class Model(nn.Module):
         logits = self.fc(self_attn_output)
         return logits
     
-    def forward_multiclass(self, x):
+    def forward_multitask(self, x):
         # Output of Bi-directional Self-attention Layers
         self_attn_output, weights_list = self.self_attn_layers(x)
         logits = self.fc(self_attn_output)

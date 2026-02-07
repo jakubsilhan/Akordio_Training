@@ -79,7 +79,7 @@ class BaseTester:
         """Loads model weights and data normalization values"""
         model_path = os.path.join(self.model_folder, f"{prefix}best_model.pt")
         loaded = torch.load(model_path, map_location=self.device)
-        model.load_state_dict(loaded["model"])
+        model.load_state_dict(loaded["model"], strict=False)
         
         normalization = loaded['normalization']
         return normalization["mean"], normalization["std"]
