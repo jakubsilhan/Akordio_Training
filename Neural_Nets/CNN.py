@@ -103,7 +103,7 @@ class Model(nn.Module):
         out = out.view(batch_size, timestep, -1) # [batch, timestep, num_chords]
         return out
     
-    def forward_multiclass(self, x):
+    def forward_multitask(self, x):
         # [batch_size, timestep, feature_size]
         batch_size, timestep, feature_size = x.shape
         context = 7

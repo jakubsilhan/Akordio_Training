@@ -25,17 +25,11 @@ class DatasetLoaderService:
             case _:
                 return Complexity.MAJMIN
 
-    def load_test_data(self, multitask: bool = False) -> List[Tuple[torch.Tensor, torch.Tensor]]:
-        """Load only test data tensors"""
-        self.multitask = multitask
-        valid_tensors = self._load_valid_data()
-        return valid_tensors
-
     def load_data(self, multitask: bool = False) -> Tuple[List[Tuple[torch.Tensor, torch.Tensor]], List[Tuple[torch.Tensor, torch.Tensor]]]:
         """Load train and valid data tensors"""
         self.multitask = multitask
         train_tensors = self._load_train_data()
-        valid_tensors = self._load_valid_data()
+        valid_tensors = self.load_valid_data()
         return train_tensors, valid_tensors
     
     def _load_train_data(self) -> List[Tuple[torch.Tensor, torch.Tensor]]:
@@ -43,7 +37,7 @@ class DatasetLoaderService:
         train_tensors = []
         # TODO add the check for missing dataset and folds here
         for fold in tqdm(os.listdir(self.config.train.data_source), desc="Loading train folds"):
-            if fold == "config.yaml" or fold == str(self.config.train.test_fold): # Skip dataset config and training fold
+            if fold == "config.yaml" or fold == str(self.config.train.val_fold): # Skip dataset config and test and val fold
                 continue
             
             fold_dir = os.path.join(self.config.train.data_source, fold)
@@ -51,12 +45,13 @@ class DatasetLoaderService:
         
         return train_tensors
     
-    def _load_valid_data(self) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+    def load_valid_data(self, multitask:bool = False) -> List[Tuple[torch.Tensor, torch.Tensor]]:
         """Load valid data from valid fold"""
+        self.multitask = multitask
         valid_tensors = []
         valid_fold_path = os.path.join(
             self.config.train.data_source, 
-            str(self.config.train.test_fold)
+            str(self.config.train.val_fold)
         )
         
         for fragment in tqdm(os.listdir(valid_fold_path), desc="Loading valid fold"):

@@ -1,6 +1,8 @@
 # chord-recognition
 A repo for chord recognition
 
+## Usage
+
 ## Requirements
 ### Pyrubberband
 The preprocessing pipeline utilizes the Rubber Band program to do data augmentation via pitch shifting. The pyrubberband python wrapper is used to control it from python, but the instalation is required to be done manually for Rubber Band. Here are the steps how to install said program on Windows.
@@ -40,7 +42,7 @@ train: # used for both training a evaluating
   data_source: "D:/Development/Source/University/Diploma/chord-recognition/Training Framework/Data/BaseDataset"
   model_path: "D:/Development/Source/University/Diploma/chord-recognition/Training Framework/Models"
   model_name: "cr1_144_majmin7"
-  test_fold: 2 # which fold to use as test set
+  val_fold: 2 # which fold to use as val set
   model_type: "cr1"
   model_complexity: "majmin7" # which type of chords to train (majmin/majmin7/complex)
   checkpoint_interval: 50

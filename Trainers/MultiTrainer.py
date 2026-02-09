@@ -25,7 +25,7 @@ class MultiTrainer(BaseTrainer):
         self.model_folder = os.path.join(
             self.config.train.model_path, 
             self.config.train.model_name+"_multi", 
-            str(self.config.train.test_fold)
+            str(self.config.train.val_fold)
         )
         os.makedirs(self.model_folder, exist_ok=True)
         shutil.copy2("config.yaml", self.model_folder)
@@ -87,8 +87,8 @@ class MultiTrainer(BaseTrainer):
                     self.save_checkpoint(state, model, optimizer, train_mean, train_std, checkpoint_time)
                 
                 # Best model evaluation
-                if valid_acc > state.best_valid_acc:
-                    state.best_valid_acc = valid_acc
+                if valid_loss < (state.best_valid_loss - self.loss_delta):
+                    state.best_valid_loss = valid_loss
                     state.best_model = model.state_dict()
                     state.best_optimizer = optimizer.state_dict()
                     state.best_epoch = epoch
@@ -99,19 +99,18 @@ class MultiTrainer(BaseTrainer):
                         'valid_accuracies': state.valid_accuracy_list.copy()
                     }
                     state.epochs_no_improve = 0
-                    print(f"New best model with acc: {state.best_valid_acc:.2f}% at epoch: {state.best_epoch}\n")
+                    print(f"New best model with loss: {state.best_valid_loss:.2f} at epoch: {state.best_epoch}\n")
                 else:
                     state.epochs_no_improve += 1
                 
+                # Adjust learning rate
+                if state.epochs_no_improve > 0 and state.epochs_no_improve % 3 == 0:
+                    adjusting_learning_rate(optimizer, factor=0.95, min_lr=5e-6)
+
                 # Early stopping check 
                 if state.epochs_no_improve >= patience:
                     print(f"Early stopping at epoch {epoch+1}, valid accuracy has not improved for {patience} epochs.\n")
                     break
-                
-                # Adjust learning rate
-                if state.before_acc > valid_acc:
-                    adjusting_learning_rate(optimizer, factor=0.95, min_lr=5e-6)
-                state.before_acc = valid_acc
                 
         except KeyboardInterrupt:
             print("Training interrupted by user!")

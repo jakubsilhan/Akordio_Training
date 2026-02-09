@@ -31,7 +31,7 @@ class BaseTester:
         self.model_folder = os.path.join(
             config.train.model_path, 
             config.train.model_name, 
-            str(config.train.test_fold)
+            str(config.train.val_fold)
         )
 
     def _get_complexity(self) -> Complexity:
@@ -62,7 +62,6 @@ class BaseTester:
     def create_model(self) -> nn.Module:
         """Create and return the appropriate model based on config"""
         model_classes = {
-            "SimpleLSTM": SimpleLSTM,
             "BTC": BTC,
             "CR2": CR2,
             "CNN": CNN,
@@ -88,7 +87,7 @@ class BaseTester:
         """Main testing loop"""
 
         # Load data
-        test_tensors = self.loader.load_test_data()
+        test_tensors = self.loader.load_valid_data()
         test_dataloader = self.create_dataloader(test_tensors)
 
         # Create model

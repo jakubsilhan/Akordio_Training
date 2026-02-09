@@ -22,9 +22,8 @@ class TrainingState:
     """Holds the current state of training"""
     epoch: int
     best_epoch: int
-    best_valid_acc: float
+    best_valid_loss: float
     epochs_no_improve: int
-    before_acc: float
     train_loss_list: List[float]
     train_accuracy_list: List[float]
     valid_loss_list: List[float]
@@ -41,10 +40,11 @@ class BaseTrainer:
         self.config = config
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.loader = DatasetLoaderService(config)
+        self.loss_delta = 1e-3
         self.model_folder = os.path.join(
             config.train.model_path, 
             config.train.model_name, 
-            str(config.train.test_fold)
+            str(config.train.val_fold)
         )
     
     def create_dataloaders(self, train_tensors, valid_tensors) -> Tuple[DataLoader, DataLoader]:
@@ -73,7 +73,6 @@ class BaseTrainer:
     def create_model(self) -> nn.Module:
         """Create and return the appropriate model based on config"""
         model_classes = {
-            "SimpleLSTM": SimpleLSTM,
             "BTC": BTC,
             "CR2": CR2,
             "CNN": CNN,
@@ -99,9 +98,8 @@ class BaseTrainer:
                 state = TrainingState(
                     epoch=0,
                     best_epoch=0,
-                    best_valid_acc=0.0,
+                    best_valid_loss=float('inf'),
                     epochs_no_improve=0,
-                    before_acc=float('-inf'),
                     train_loss_list=[],
                     train_accuracy_list=[],
                     valid_loss_list=[],
@@ -128,13 +126,15 @@ class BaseTrainer:
             
             train_mean = normalization.get('mean', train_mean)
             train_std = normalization.get('std', train_std)
+
+            valid_losses = prev_losses.get('valid_losses', [])
+            current_best = min(valid_losses) if valid_losses else float('inf')
             
             state = TrainingState(
                 epoch=start_epoch,
                 best_epoch=start_epoch - 1,
-                best_valid_acc=0.0,
+                best_valid_loss=current_best,
                 epochs_no_improve=0,
-                before_acc=float('-inf'),
                 train_loss_list=prev_losses.get('train_losses', []),
                 train_accuracy_list=prev_losses.get('train_accuracies', []),
                 valid_loss_list=prev_losses.get('valid_losses', []),
@@ -211,8 +211,8 @@ class BaseTrainer:
                     self.save_checkpoint(state, model, optimizer, train_mean, train_std, checkpoint_time)
                 
                 # Best model evaluation
-                if valid_acc > state.best_valid_acc:
-                    state.best_valid_acc = valid_acc
+                if valid_loss < (state.best_valid_loss - self.loss_delta):
+                    state.best_valid_loss = valid_loss
                     state.best_model = model.state_dict()
                     state.best_optimizer = optimizer.state_dict()
                     state.best_epoch = epoch
@@ -223,19 +223,18 @@ class BaseTrainer:
                         'valid_accuracies': state.valid_accuracy_list.copy()
                     }
                     state.epochs_no_improve = 0
-                    print(f"New best model with acc: {state.best_valid_acc:.2f}% at epoch: {state.best_epoch}\n")
+                    print(f"New best model with loss: {state.best_valid_loss:.2f} at epoch: {state.best_epoch}\n")
                 else:
                     state.epochs_no_improve += 1
                 
+                # Adjust learning rate
+                if state.epochs_no_improve > 0 and state.epochs_no_improve % 3 == 0:
+                    adjusting_learning_rate(optimizer, factor=0.95, min_lr=5e-6)
+
                 # Early stopping check 
                 if state.epochs_no_improve >= patience:
                     print(f"Early stopping at epoch {epoch+1}, valid accuracy has not improved for {patience} epochs.\n")
                     break
-                
-                # Adjust learning rate
-                if state.before_acc > valid_acc:
-                    adjusting_learning_rate(optimizer, factor=0.95, min_lr=5e-6)
-                state.before_acc = valid_acc
                 
         except KeyboardInterrupt:
             print("Training interrupted by user!")
@@ -351,7 +350,7 @@ class BaseTrainer:
             'total_time': time
         }
         torch.save(best_state_dict, best_model_path)
-        print(f"\nSaving best model from epoch {state.best_epoch} with accuracy {state.best_valid_acc:.2f}%")
+        print(f"\nSaving best model from epoch {state.best_epoch} with loss {state.best_valid_loss:.2f}%")
         
         # Save final model
         final_model_path = os.path.join(self.model_folder, f"{prefix}final_model.pt")

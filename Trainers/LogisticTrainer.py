@@ -18,7 +18,7 @@ class LogisticTrainer:
         self.model_folder = os.path.join(
             config.train.model_path, 
             config.train.model_name, 
-            str(config.train.test_fold)
+            str(config.train.val_fold)
         )
 
     def train(self):

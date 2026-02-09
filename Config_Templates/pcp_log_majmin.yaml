@@ -22,7 +22,7 @@ train: # used for both training a evaluating
   data_source: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/PCPDataset"
   model_path: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Models"
   model_name: "pcp_log_majmin"
-  test_fold: 3 # which fold to use as test set
+  val_fold: 3 # which fold to use as test set
   model_type: "CR1" # CR1/SimpleLSTM/BTC...
   model_complexity: "majmin" # which type of chords to train (majmin/majmin7/complex)
   checkpoint_interval: 10
@@ -39,6 +39,3 @@ train: # used for both training a evaluating
     loss_patience: 10
     learning_rate: 1e-4
     weight_decay: 1e-5
-    scheduler_step: 100
-    scheduler_gamma: 0.1
-    normalization: True # Not working for now (always on)

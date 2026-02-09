@@ -16,7 +16,7 @@ class CRFTester(BaseTester):
         """Main testing loop"""
 
         # Load data
-        test_tensors = self.loader.load_test_data()
+        test_tensors = self.loader.load_valid_data()
         test_dataloader = self.create_dataloader(test_tensors)
 
         # Create pre_model

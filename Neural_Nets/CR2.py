@@ -51,7 +51,7 @@ class Model(nn.Module):
         logits = self.fc(gru)
         return logits
     
-    def forward_multiclass(self, x):
+    def forward_multitask(self, x):
         # [batch_size, timestep,feature_size]
         x = x.unsqueeze(1) # [batch_size, num_channels=1, timestep, feature_size]
         x = self.batch_norm(x)
