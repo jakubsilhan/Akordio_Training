@@ -83,11 +83,14 @@ class BaseTester:
         normalization = loaded['normalization']
         return normalization["mean"], normalization["std"]
     
-    def test(self) -> None:
+    def test(self, test: bool = False) -> None:
         """Main testing loop"""
 
         # Load data
-        test_tensors = self.loader.load_valid_data()
+        if test:
+            test_tensors = self.loader.load_test_data()
+        else:
+            test_tensors = self.loader.load_valid_data()
         test_dataloader = self.create_dataloader(test_tensors)
 
         # Create model

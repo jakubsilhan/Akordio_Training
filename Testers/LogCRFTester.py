@@ -13,10 +13,13 @@ class LogCRFTester(BaseTester):
     Tester class for sklearn chord recognition models with incorporated linear chain CRF
     """
 
-    def test(self) -> None:
+    def test(self, test: bool = False) -> None:
         """Main testing loop"""
         # Load data
-        test_tensors = self.loader.load_valid_data()
+        if test:
+            test_tensors = self.loader.load_test_data()
+        else:
+            test_tensors = self.loader.load_valid_data()
         test_dataloader = self.create_dataloader(test_tensors)
 
         # Load pre-model

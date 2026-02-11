@@ -36,11 +36,12 @@ class DatasetLoaderService:
         """Load training data from all folds except valid fold"""
         train_tensors = []
         # TODO add the check for missing dataset and folds here
-        for fold in tqdm(os.listdir(self.config.train.data_source), desc="Loading train folds"):
+        data_path = os.path.join(self.config.train.data_source, "train")
+        for fold in tqdm(os.listdir(data_path), desc="Loading train folds"):
             if fold == "config.yaml" or fold == str(self.config.train.val_fold): # Skip dataset config and test and val fold
                 continue
             
-            fold_dir = os.path.join(self.config.train.data_source, fold)
+            fold_dir = os.path.join(data_path, fold)
             train_tensors.extend(self._load_fold(fold_dir))
         
         return train_tensors
@@ -50,7 +51,8 @@ class DatasetLoaderService:
         self.multitask = multitask
         valid_tensors = []
         valid_fold_path = os.path.join(
-            self.config.train.data_source, 
+            self.config.train.data_source,
+            "train",
             str(self.config.train.val_fold)
         )
         
@@ -59,6 +61,26 @@ class DatasetLoaderService:
                 continue
             
             fragment_path = os.path.join(valid_fold_path, fragment)
+            tensor_pair = self._load_fragment(fragment_path)
+            if tensor_pair:
+                valid_tensors.append(tensor_pair)
+        
+        return valid_tensors
+    
+    def load_test_data(self) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+        """Load test data"""
+        valid_tensors = []
+        test_path = os.path.join(
+            self.config.train.data_source,
+            "test",
+            "0"
+        )
+        
+        for fragment in tqdm(os.listdir(test_path), desc="Loading test data"):
+            if not fragment.endswith(".npz") or "_shift00_" not in fragment: # Skip augmented data for validating
+                continue
+            
+            fragment_path = os.path.join(test_path, fragment)
             tensor_pair = self._load_fragment(fragment_path)
             if tensor_pair:
                 valid_tensors.append(tensor_pair)

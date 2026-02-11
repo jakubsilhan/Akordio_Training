@@ -15,105 +15,34 @@ from Trainers.BaseTrainer import BaseTrainer
 class LogCRFTrainer(BaseTrainer):
     """Trainer for CRF model using Logistic Regression as pre-model"""
     
-    def train(self):
-        """Main training loop"""
-        # Setup
+    def setup(self):
         torch.manual_seed(self.config.base.random_seed)
-        
-        # Load data
+        # Pathing
+        self.prefix = "crf_"
+
+        # Data
         train_tensors, valid_tensors = self.loader.load_data()
-        train_dataloader, valid_dataloader = self.create_dataloaders(train_tensors, valid_tensors)
-        
-        # Load pre-trained logistic regression model and scaler
-        model_path = os.path.join(self.model_folder, "model.joblib")
-        loaded = joblib.load(model_path)
-        pre_model: LogisticRegression = loaded["model"]
-        scaler: StandardScaler = loaded["scaler"]
-        
-        # Initialize CRF
-        crf = CRF(num_labels=self.config.train.model.output).to(self.device)
-        optimizer = optim.Adam(crf.parameters(), lr=self.config.train.model.learning_rate)
-        
-        # Load checkpoint if exists
-        state, _, _ = self.load_checkpoint_if_exists(crf, optimizer, 0.0, 1.0, "crf_")
-        
-        # Training parameters
-        patience = self.config.train.model.loss_patience
-        total_epochs = state.epoch + self.config.train.model.epoch_count
-        
-        start_time = time.time()
+        self.train_loader, self.val_loader = self.create_dataloaders(train_tensors, valid_tensors)
 
-        try:
-            pbar = tqdm(range(state.epoch, total_epochs), desc="Training Progress")
-            
-            for epoch in pbar:
-                state.epoch = epoch
-                
-                # Train
-                train_loss, train_acc = self.train_epoch(
-                    crf, pre_model, scaler, train_dataloader, optimizer
-                )
-                
-                # Evaluate
-                valid_loss, valid_acc = self.evaluate_epoch(
-                    crf, pre_model, scaler, valid_dataloader
-                )
-                
-                # Update state
-                state.train_loss_list.append(train_loss)
-                state.train_accuracy_list.append(train_acc)
-                state.valid_loss_list.append(valid_loss)
-                state.valid_accuracy_list.append(valid_acc)
-                
-                # Log progress
-                tqdm.write(f"Epoch: {epoch} | Loss: {train_loss:.5f}, Acc: {train_acc:.2f}% | valid Loss: {valid_loss:.5f}, valid Acc: {valid_acc:.2f}%\n")
-                
-                # Checkpointing
-                if (epoch + 1) % self.config.train.checkpoint_interval == 0:
-                    checkpoint_time = time.time() - start_time
-                    self.save_checkpoint(state, crf, optimizer, 0.0, 1.0, checkpoint_time, "crf_")
-                
-                # Early stopping check
-                if valid_loss < (state.best_valid_loss - self.loss_delta):
-                    state.best_valid_loss = valid_loss
-                    state.best_model = crf.state_dict()
-                    state.best_optimizer = optimizer.state_dict()
-                    state.best_epoch = epoch
-                    state.best_losses = {
-                        'train_losses': state.train_loss_list.copy(),
-                        'train_accuracies': state.train_accuracy_list.copy(),
-                        'valid_losses': state.valid_loss_list.copy(),
-                        'valid_accuracies': state.valid_accuracy_list.copy()
-                    }
-                    state.epochs_no_improve = 0
-                    print(f"New best model with loss: {state.best_valid_loss:.2f} at epoch: {state.best_epoch}\n")
-                else:
-                    state.epochs_no_improve += 1
-                
-                # Adjust learning rate
-                if state.epochs_no_improve > 0 and state.epochs_no_improve % 3 == 0:
-                    adjusting_learning_rate(optimizer, factor=0.95, min_lr=5e-6)
+        # Pre-Model
+        pre_model_path = os.path.join(self.model_folder, "model.joblib")
+        pre_model_loaded = joblib.load(pre_model_path)
+        self.pre_model: LogisticRegression = pre_model_loaded["model"]
+        self.scaler: StandardScaler = pre_model_loaded["scaler"]
 
-                # Early stopping check
-                if state.epochs_no_improve >= patience:
-                    print(f"Early stopping at epoch {epoch+1}, valid accuracy has not improved for {patience} epochs.\n")
-                    break
-                
-        except KeyboardInterrupt:
-            print("Training interrupted by user!")
-        finally:
-            total_time = time.time() - start_time
-            self.save_final_models(state, crf, optimizer, 0.0, 1.0, total_time, "crf_")
-            self.plot_learning_curves(state)
+        # CRF
+        self.model = CRF(num_labels=self.config.train.model.output).to(self.device)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.train.model.learning_rate)
+        self.train_mean, self.train_std = 0.0, 1.0
+        self.state, self.train_mean, self.train_std = self.load_checkpoint_if_exists(self.model, self.optimizer, self.train_mean, self.train_std, "crf_")
     
-    def train_epoch(self, crf: CRF, pre_model: LogisticRegression, scaler: StandardScaler, 
-                   dataloader: DataLoader, optimizer: optim.Optimizer) -> Tuple[float, float]:
+    def train_epoch(self) -> Tuple[float, float]:
         """Train for one epoch and return average loss and accuracy"""
-        crf.train()
+        self.model.train()
         losses = []
         accuracies = []
         
-        for X_batch, y_batch in dataloader:
+        for X_batch, y_batch in self.train_loader:
             # Convert to numpy for sklearn
             X_batch = X_batch.detach().cpu().numpy().astype(np.float32)
             y_batch = y_batch.to(self.device)
@@ -122,17 +51,17 @@ class LogCRFTrainer(BaseTrainer):
             # Normalization with scaler
             batch_size, seq_len, feat_dim = X_batch.shape
             X_flat = X_batch.reshape(-1, feat_dim)
-            X_scaled = scaler.transform(X_flat)
+            X_scaled = self.scaler.transform(X_flat)
             X_batch = X_scaled.reshape(batch_size, seq_len, feat_dim)
             
             # Get logits from logistic regression
             X_flat = X_batch.reshape(-1, feat_dim)
-            probs = pre_model.predict_proba(X_flat)
+            probs = self.pre_model.predict_proba(X_flat)
             logits = torch.from_numpy(probs).float()
             logits = torch.log(logits + 1e-8).view(batch_size, seq_len, -1).to(self.device)
             
             # Get predictions
-            preds = crf.viterbi_decode(logits, mask) # type: ignore
+            preds = self.model.viterbi_decode(logits, mask) # type: ignore
             
             # Convert to tensor and pad
             preds_tensor = [torch.tensor(p, device=self.device) for p in preds]
@@ -140,7 +69,7 @@ class LogCRFTrainer(BaseTrainer):
                                        padding_value=self.config.train.model.padding_index)
             
             # Loss and accuracy
-            log_likelihood = crf(logits, y_batch, mask)
+            log_likelihood = self.model(logits, y_batch, mask)
             loss = -log_likelihood.mean()
 
             acc = accuracy_fn(y_batch, preds_padded, self.config.train.model.padding_index)
@@ -149,24 +78,23 @@ class LogCRFTrainer(BaseTrainer):
             accuracies.append(acc)
             
             # Backpropagation
-            optimizer.zero_grad()
+            self.optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
+            self.optimizer.step()
         
         average_loss = sum(losses) / len(losses)
         average_acc = sum(accuracies) / len(accuracies)
         
         return average_loss, average_acc
     
-    def evaluate_epoch(self, crf: CRF, pre_model: LogisticRegression, scaler: StandardScaler,
-                      dataloader: DataLoader) -> Tuple[float, float]:
+    def evaluate_epoch(self) -> Tuple[float, float]:
         """Evaluate model and return average loss and accuracy"""
-        crf.eval()
+        self.model.eval()
         losses = []
         accuracies = []
         
         with torch.inference_mode():
-            for X_batch, y_batch in dataloader:
+            for X_batch, y_batch in self.train_loader:
                 # Convert to numpy for sklearn
                 X_batch = X_batch.detach().cpu().numpy().astype(np.float32)
                 y_batch = y_batch.to(self.device)
@@ -175,21 +103,21 @@ class LogCRFTrainer(BaseTrainer):
                 # Normalization with scaler
                 batch_size, seq_len, feat_dim = X_batch.shape
                 X_flat = X_batch.reshape(-1, feat_dim)
-                X_scaled = scaler.transform(X_flat)
+                X_scaled = self.scaler.transform(X_flat)
                 X_batch = X_scaled.reshape(batch_size, seq_len, feat_dim)
                 
                 # Get logits from logistic regression
                 X_flat = X_batch.reshape(-1, feat_dim)
-                probs = pre_model.predict_proba(X_flat)
+                probs = self.pre_model.predict_proba(X_flat)
                 logits = torch.from_numpy(probs).float()
                 logits = torch.log(logits + 1e-8).view(batch_size, seq_len, -1).to(self.device)
                 
                 # Loss
-                log_likelihood = crf(logits, y_batch, mask)
+                log_likelihood = self.model(logits, y_batch, mask)
                 loss = -log_likelihood.mean()
                 
                 # Get predictions
-                preds = crf.viterbi_decode(logits, mask) # type: ignore
+                preds = self.model.viterbi_decode(logits, mask) # type: ignore
                 
                 # Convert to tensor and pad
                 preds_tensor = [torch.tensor(p, device=self.device) for p in preds]
