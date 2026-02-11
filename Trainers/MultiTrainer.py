@@ -41,7 +41,6 @@ class MultiTrainer(BaseTrainer):
         # Create model, loss, optimizer
         model = self.create_model()
         loss_fn = nn.CrossEntropyLoss(ignore_index=self.config.train.model.padding_index)
-        # optimizer = optim.Adam(model.parameters(), lr=self.config.train.model.learning_rate, weight_decay=self.config.train.model.weight_decay, betas=(0.9, 0.98), eps=1e-9)
         optimizer = optim.Adam(model.parameters(), lr=self.config.train.model.learning_rate, weight_decay=self.config.train.model.weight_decay)
         
         # Load checkpoint if exists
