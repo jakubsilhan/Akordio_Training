@@ -29,7 +29,7 @@ class DatasetLoaderService:
         """Load train and valid data tensors"""
         self.multitask = multitask
         train_tensors = self._load_train_data()
-        valid_tensors = self.load_valid_data()
+        valid_tensors = self.load_valid_data(multitask)
         return train_tensors, valid_tensors
     
     def _load_train_data(self) -> List[Tuple[torch.Tensor, torch.Tensor]]:
