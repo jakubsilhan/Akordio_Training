@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from dataclasses import dataclass
 from typing import Tuple, List, Dict
 
-from Utils.training_utils import accuracy_fn, adjusting_learning_rate, compute_mean_std
+from Utils.training_utils import accuracy_fn, compute_mean_std
 from Akordio_Core.Classes.NetConfig import Config
 from Akordio_Core.Classes.SongDataset import SongDataset, make_collate_fn
 from Neural_Nets.CNN import Model as CNN
@@ -187,7 +187,14 @@ class BaseTrainer:
         torch.manual_seed(self.config.base.random_seed)
                 
         # Training parameters
-        patience = self.config.train.model.loss_patience
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer, 
+            mode='min', 
+            factor=0.5, 
+            patience=3,
+            threshold=self.config.train.model.loss_delta,
+            min_lr=5e-6
+        )
         total_epochs = self.state.epoch + self.config.train.model.epoch_count
         
         start_time = time.time()
@@ -203,6 +210,9 @@ class BaseTrainer:
                 
                 # Evaluate
                 valid_loss, valid_acc = self.evaluate_epoch()
+
+                # Scheduler
+                scheduler.step(valid_loss)
                 
                 # Update state
                 self.state.train_loss_list.append(train_loss)
@@ -235,13 +245,9 @@ class BaseTrainer:
                 else:
                     self.state.epochs_no_improve += 1
                 
-                # Adjust learning rate
-                if self.state.epochs_no_improve > 0 and self.state.epochs_no_improve % 3 == 0:
-                    adjusting_learning_rate(self.optimizer, factor=0.95, min_lr=5e-6)
-
                 # Early stopping check 
-                if self.state.epochs_no_improve >= patience:
-                    print(f"Early stopping at epoch {epoch+1}, valid accuracy has not improved for {patience} epochs.\n")
+                if self.state.epochs_no_improve >= self.config.train.model.loss_patience:
+                    print(f"Early stopping at epoch {epoch+1}, valid accuracy has not improved for {self.config.train.model.loss_patience} epochs.\n")
                     break
                 
         except KeyboardInterrupt:

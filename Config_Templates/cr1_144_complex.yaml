@@ -31,7 +31,7 @@ train: # used for both training a evaluating
     batch_size: 128
     input: 144 # feature size 144/216
     output: 170 # output size (number of chords 25/61/170)
-    hidden: [256] # hidden size (depends on a model) 128/256
+    hidden: [512] # hidden size (depends on a model) 256/512
     dropout: [0, 0, 0] # dropout (depends on a model)
     layers: 1 # number of layers
     bidirectional: True

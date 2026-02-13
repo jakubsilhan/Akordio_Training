@@ -26,6 +26,9 @@ class Model(nn.Module):
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(5,5), padding=2)  # preserve sequence length
         self.conv2 = nn.Conv2d(1, 36, kernel_size=(1, self.feature_size))
 
+        # Dropout
+        self.dp = nn.Dropout(self.dropout[0])
+
         # Recurrent layers
         self.gru = nn.GRU(input_size=36, hidden_size=self.hidden_size, num_layers=self.num_layers, batch_first=True, bidirectional=self.bidirectional)
 
@@ -56,6 +59,8 @@ class Model(nn.Module):
         conv = self.relu(self.conv1(x))
         conv = self.relu(self.conv2(conv)) # [batch, out_feature_maps=out_channels, in_feature]
         conv = conv.squeeze(3).permute(0,2,1) # [batch, timestep, feature]
+
+        conv = self.dp(conv)
 
         h0 = torch.zeros(self.num_layers * self.num_directions, conv.size(0), self.hidden_size).to(self.device)
         gru, h = self.gru(conv, h0)

@@ -32,10 +32,3 @@ def compute_mean_std(dataloader: DataLoader):
     std = math.sqrt(var) # standard deviation
 
     return mean, std
-
-def adjusting_learning_rate(optimizer, factor=.5, min_lr=0.00001):
-    for i, param_group in enumerate(optimizer.param_groups):
-        old_lr = float(param_group['lr'])
-        new_lr = max(old_lr * factor, min_lr)
-        param_group['lr'] = new_lr
-        print(f"adjusting learning rate from {old_lr:.6f} to {new_lr:.6f}\n")

@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 from typing import Tuple
 
-from Utils.training_utils import accuracy_fn, adjusting_learning_rate
+from Utils.training_utils import accuracy_fn
 from Akordio_Core.Classes.SongDataset import SongDataset
 from Trainers.BaseTrainer import BaseTrainer
 

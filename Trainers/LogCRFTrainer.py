@@ -9,7 +9,7 @@ from typing import Tuple
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 
-from Utils.training_utils import accuracy_fn, adjusting_learning_rate
+from Utils.training_utils import accuracy_fn
 from Trainers.BaseTrainer import BaseTrainer
 
 class LogCRFTrainer(BaseTrainer):

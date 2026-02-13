@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from typing import Tuple
 
 from Akordio_Core.Classes.NetConfig import Config
-from Utils.training_utils import accuracy_fn, adjusting_learning_rate, compute_mean_std
+from Utils.training_utils import accuracy_fn, compute_mean_std
 from Trainers.BaseTrainer import BaseTrainer
 
 W_CHORD=1.0
