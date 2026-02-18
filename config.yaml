@@ -14,7 +14,7 @@ data:
     bins_per_octave: 24 # frequency resolution of CQT
     cqt_bins: 144 # number of total bins that specifies number of octaves (144/24=6) or (216/36=6)
     hop_length: 2048 # number of samples between consecutive analysis frames (frame_length scales with frequency -> lower f means larger window)
-    fragment_size: 108 # number of frames per fragment ((2048/22050)*108=10.03s) - 0 for full songs ((1024/22050)*216=10.03)
+    fragment_size: 108 # number of frames per fragment ((2048/22050)*108=10.03s) - 0 for full songs
     fragment_hop: 0.5
     pitch_shift_start: -6 # lowest pitch shift
     pitch_shift_end: 5 # highest pitch shift
@@ -22,17 +22,17 @@ data:
 train: # used for both training a evaluating
   data_source: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/BaseDataset"
   model_path: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Models"
-  model_name: "cr1_144_complex"
-  val_fold: 2 # which fold to use as validation set
-  model_type: "CR1" # CR1/CR2/BTC/CNN...
+  model_name: "cnn_144_complex"
+  val_fold: 1 # which fold to use as validation set
+  model_type: "CNN" # CR1/CR2/BTC/CNN...
   model_complexity: "complex" # which type of chords to train (majmin/majmin7/complex)
   checkpoint_interval: 10 # after how many epochs to checkpoint
   model:
-    batch_size: 128
+    batch_size: 2
     input: 144 # feature size 144/216
-    output: 170 # output size (number of chords 25/61/169)
+    output: 170 # output size (number of chords 25/61/170)
     hidden: [256] # hidden size (depends on a model) 128/256
-    dropout: [0, 0, 0] # dropout (depends on a model)
+    dropout: [0.5] # dropout (depends on a model)
     layers: 1 # number of layers
     bidirectional: True
     padding_index: -1

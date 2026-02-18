@@ -47,7 +47,7 @@ class LogisticTrainer:
         clf = LogisticRegression(
             solver="lbfgs",
             max_iter=1000,
-            class_weight="balanced",
+            # class_weight="balanced",
             random_state=self.config.base.random_seed
         )
 

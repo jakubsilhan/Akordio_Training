@@ -14,7 +14,7 @@ data:
     bins_per_octave: 24 # frequency resolution of CQT
     cqt_bins: 144 # number of total bins that specifies number of octaves (144/24=6) or (216/36=6)
     hop_length: 2048 # number of samples between consecutive analysis frames (frame_length scales with frequency -> lower f means larger window)
-    fragment_size: 108 # number of frames per fragment ((2048/22050)*108=10.03s) - 0 for full songs ((1024/22050)*216=10.03)
+    fragment_size: 108 # number of frames per fragment ((2048/22050)*108=10.03s) - 0 for full songs
     fragment_hop: 0.5
     pitch_shift_start: -6 # lowest pitch shift
     pitch_shift_end: 5 # highest pitch shift
