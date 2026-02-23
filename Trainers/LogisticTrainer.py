@@ -66,3 +66,35 @@ class LogisticTrainer:
 
         # Saving model
         joblib.dump({"model": clf, "scaler": scaler, "total_time": total_time}, os.path.join(self.model_folder,"model.joblib"))
+
+    def train_final(self, epoch_count: int):
+        """Logistic Regression final training"""
+        # Setup
+        os.makedirs(self.model_folder, exist_ok=True)
+        shutil.copy2("config.yaml", self.model_folder)
+
+        # Load data
+        train_tensors, _ = self.loader.load_data()
+
+        train_x_list, train_y_list = zip(*train_tensors)
+        train_X = np.concatenate(train_x_list, axis=0)
+        train_y = np.concatenate(train_y_list, axis=0)
+
+        # Normalization
+        scaler = StandardScaler()
+        train_X = scaler.fit_transform(train_X)
+
+        # Model
+        clf = LogisticRegression(
+            solver="lbfgs",
+            max_iter=epoch_count,
+            random_state=self.config.base.random_seed
+        )
+
+        start_time = time.time()
+        # Training
+        clf.fit(train_X, train_y)
+        total_time = time.time() - start_time
+
+        # Saving model
+        joblib.dump({"model": clf, "scaler": scaler, "total_time": total_time}, os.path.join(self.model_folder,"model.joblib"))
