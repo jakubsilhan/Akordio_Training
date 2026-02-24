@@ -1,6 +1,7 @@
 import os, shutil, joblib, time
 import numpy as np
 
+from pathlib import Path
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from Services.DatasetLoaderService import DatasetLoaderService
@@ -16,7 +17,8 @@ class LogisticTrainer:
         self.config = config
         self.loader = DatasetLoaderService(config)
         self.model_folder = os.path.join(
-            config.train.model_path, 
+            Path(__file__).resolve().parent.parent,
+            "Models",
             config.train.model_name, 
             str(config.train.val_fold)
         )

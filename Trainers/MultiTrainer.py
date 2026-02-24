@@ -1,8 +1,7 @@
-import os, shutil, torch, time
+import os, torch
 import torch.nn as nn
 import torch.optim as optim
-from tqdm import tqdm
-from torch.utils.data import DataLoader
+from pathlib import Path
 from typing import Tuple
 
 from Akordio_Core.Classes.NetConfig import Config
@@ -23,7 +22,8 @@ class MultiTrainer(BaseTrainer):
         if not model_name.endswith("_multi"):
             model_name += "_multi"
         self.model_folder = os.path.join(
-            self.config.train.model_path, 
+            Path(__file__).resolve().parent.parent,
+            "Models",
             self.config.train.model_name+"_multi", 
             str(self.config.train.val_fold)
         )

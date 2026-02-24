@@ -2,6 +2,7 @@ import os, torch, shutil, time
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
+from pathlib import Path
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from dataclasses import dataclass
@@ -41,7 +42,8 @@ class BaseTrainer:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.loader = DatasetLoaderService(config)
         self.model_folder = os.path.join(
-            config.train.model_path, 
+            Path(__file__).resolve().parent.parent,
+            "Models",
             config.train.model_name, 
             str(config.train.val_fold)
         )
