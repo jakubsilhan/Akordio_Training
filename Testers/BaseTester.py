@@ -1,6 +1,9 @@
 import os, json, time, mir_eval, torch
 import numpy as np
 import torch.nn as nn
+from pathlib import Path
+from dataclasses import dataclass, field, asdict
+from sklearn.metrics import confusion_matrix
 
 from tqdm import tqdm
 from torch.utils.data import DataLoader
@@ -15,8 +18,17 @@ from Services.DatasetLoaderService import DatasetLoaderService
 from Neural_Nets.CNN import Model as CNN
 from Neural_Nets.CR1 import Model as CR1
 from Neural_Nets.CR2 import Model as CR2
-from Neural_Nets.SimpleLSTM import Model as SimpleLSTM
 from Neural_Nets.BTC import Model as BTC
+
+@dataclass
+class EvalData:
+    """Holds the evaluation data"""
+    results: Dict = field(default_factory=dict)
+    epoch_count: int = 0
+    train_time_per_epoch: float = 0.0
+    inference_time_per_batch: float = 0.0
+    confusion_matrix: List = field(default_factory=list)
+    conf_labels: List = field(default_factory=list)
 
 class BaseTester:
     """
@@ -28,8 +40,10 @@ class BaseTester:
         self.complexity = self._get_complexity()
         self.chord_tool = Chords()
         self.loader = DatasetLoaderService(config)
+        self.eval_data = EvalData()
         self.model_folder = os.path.join(
-            config.train.model_path, 
+            Path(__file__).resolve().parent.parent,
+            "Models",
             config.train.model_name, 
             str(config.train.val_fold)
         )
@@ -81,6 +95,10 @@ class BaseTester:
         model.load_state_dict(loaded["model"], strict=False)
         
         normalization = loaded['normalization']
+
+        self.eval_data.epoch_count = loaded['epoch']
+        self.eval_data.train_time_per_epoch = loaded['total_time']/self.eval_data.epoch_count
+
         return normalization["mean"], normalization["std"]
     
     def test(self, test: bool = False) -> None:
@@ -103,6 +121,11 @@ class BaseTester:
         evals = []
         times = []
 
+        # Conf matrix preparation
+        labels = self.chord_tool.get_labels(self.complexity) 
+        num_classes = len(labels)
+        conf_m = np.zeros((num_classes, num_classes), dtype=np.int64)
+
         with torch.inference_mode():
             # Batches
             for X_batch, y_batch in tqdm(test_dataloader, desc="Testing model"):
@@ -124,6 +147,11 @@ class BaseTester:
 
                 preds = torch.softmax(logits, dim=2).argmax(dim=2)
 
+                # Conf matrix aggregation
+                y_true = y_batch.view(-1).cpu().numpy()
+                y_pred = preds.view(-1).cpu().numpy()
+                conf_m += confusion_matrix(y_true, y_pred, labels=range(num_classes))
+
                 # Per fragment
                 for i in range(X_batch.size(0)):
 
@@ -143,12 +171,16 @@ class BaseTester:
                     # Mir evals
                     evals.append(mir_eval.chord.evaluate(targ_intervals, targ_lab, pred_intervals, pred_lab))
 
+        self.eval_data.confusion_matrix = conf_m.tolist()
+        self.eval_data.conf_labels = labels
+
         # Aggregations
-        results = self.process_results(evals, times)
+        self.process_results(evals, times)
+        
 
         # Outputs
-        self.save_results(results, 'test_mir_eval.json')
-        self.print_results(results)
+        self.save_results('evaluation.json')
+        self.print_results()
 
 
     def create_interval_sets(self, predictions: List[str], targets: List[str]) -> Tuple[List, List, List, List]:
@@ -233,16 +265,17 @@ class BaseTester:
 
         # Time
         avg_time = float(np.average(times))
-        average_eval["inference_time"] = avg_time
+        self.eval_data.results = average_eval
+        self.eval_data.inference_time_per_batch = avg_time
         return average_eval
     
-    def save_results(self, results: Dict, filename: str) -> None:
+    def save_results(self, filename: str) -> None:
         """Saves results"""
-        with open(os.path.join(self.model_folder, 'test_mir_eval.json'), 'w') as f:
-            json.dump(results, f, indent=2)
+        with open(os.path.join(self.model_folder, filename), 'w') as f:
+            json.dump(asdict(self.eval_data), f, indent=4)
 
-    def print_results(self, results: Dict) -> None:
+    def print_results(self) -> None:
         """Prints formatted results"""
         print("Testing results:")
-        for k, v in results.items():
+        for k, v in self.eval_data.results.items():
             print(f"{k:>15}: {v:.4f}")

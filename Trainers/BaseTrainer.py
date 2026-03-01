@@ -1,4 +1,4 @@
-import os, torch, shutil, time
+import os, torch, shutil, time, copy
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
@@ -14,7 +14,6 @@ from Akordio_Core.Classes.SongDataset import SongDataset, make_collate_fn
 from Neural_Nets.CNN import Model as CNN
 from Neural_Nets.CR1 import Model as CR1
 from Neural_Nets.CR2 import Model as CR2
-from Neural_Nets.SimpleLSTM import Model as SimpleLSTM
 from Neural_Nets.BTC import Model as BTC
 from Services.DatasetLoaderService import DatasetLoaderService
 
@@ -32,6 +31,7 @@ class TrainingState:
     best_model: Dict
     best_optimizer: Dict
     best_losses: Dict
+    total_time: float
 
 class BaseTrainer:
     """
@@ -112,7 +112,8 @@ class BaseTrainer:
                         'train_accuracies': [],
                         'valid_losses': [],
                         'valid_accuracies': []
-                    }
+                    },
+                    total_time=0.0
                 )
                 return state, train_mean, train_std
             
@@ -142,7 +143,8 @@ class BaseTrainer:
                 valid_accuracy_list=prev_losses.get('valid_accuracies', []),
                 best_model=model.state_dict(),
                 best_optimizer=optimizer.state_dict(),
-                best_losses=prev_losses
+                best_losses=prev_losses,
+                total_time = loaded.get('total_time', 0.0)
             )
             
             # Rename checkpoint
@@ -227,14 +229,14 @@ class BaseTrainer:
                 
                 # Checkpointing
                 if (epoch + 1) % self.config.train.checkpoint_interval == 0:
-                    checkpoint_time = time.time() - start_time
+                    checkpoint_time = self.state.total_time + (time.time() - start_time)
                     self.save_checkpoint(checkpoint_time)
                 
                 # Best model evaluation
                 if valid_loss < (self.state.best_valid_loss - self.config.train.model.loss_delta):
                     self.state.best_valid_loss = valid_loss
-                    self.state.best_model = self.model.state_dict()
-                    self.state.best_optimizer = self.optimizer.state_dict()
+                    self.state.best_model = copy.deepcopy(self.model.state_dict())
+                    self.state.best_optimizer = copy.deepcopy(self.optimizer.state_dict())
                     self.state.best_epoch = epoch
                     self.state.best_losses = {
                         'train_losses': self.state.train_loss_list.copy(),
@@ -255,7 +257,7 @@ class BaseTrainer:
         except KeyboardInterrupt:
             print("Training interrupted by user!")
         finally:
-            total_time = time.time() - start_time
+            total_time = self.state.total_time + (time.time() - start_time)
             self.save_final_models(total_time)
             self.plot_learning_curves()
 
@@ -287,13 +289,13 @@ class BaseTrainer:
                 
                 # Checkpointing
                 if (epoch + 1) % self.config.train.checkpoint_interval == 0:
-                    checkpoint_time = time.time() - start_time
+                    checkpoint_time = self.state.total_time + (time.time() - start_time)
                     self.save_checkpoint(checkpoint_time)
                 
         except KeyboardInterrupt:
             print("Training interrupted by user!")
         finally:
-            total_time = time.time() - start_time
+            total_time = self.state.total_time + (time.time() - start_time)
             self.save_final_models(total_time, final=True)
             self.plot_learning_curves()
 

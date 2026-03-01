@@ -1,5 +1,6 @@
 import time, mir_eval, torch, os, joblib
 import numpy as np
+from sklearn.metrics import confusion_matrix
 
 from tqdm import tqdm
 
@@ -38,6 +39,11 @@ class LogCRFTester(BaseTester):
         evals = []
         times = []
 
+        # Conf matrix preparation
+        labels = self.chord_tool.get_labels(self.complexity) 
+        num_classes = len(labels)
+        conf_m = np.zeros((num_classes, num_classes), dtype=np.int64)
+
         with torch.inference_mode():
             # Batches
             for X_batch, y_batch in tqdm(test_dataloader, desc="Testing model"):
@@ -69,6 +75,11 @@ class LogCRFTester(BaseTester):
                 end_t = time.perf_counter()
                 times.append(end_t-start_t)
 
+                # Conf matrix aggregation
+                y_true = y_batch.view(-1).cpu().numpy()
+                y_pred = preds
+                conf_m += confusion_matrix(y_true, y_pred, labels=range(num_classes))
+
                 # Per fragment
                 for i in range(X_batch.size(0)):
 
@@ -88,9 +99,12 @@ class LogCRFTester(BaseTester):
                     # Mir evals
                     evals.append(mir_eval.chord.evaluate(targ_intervals, targ_lab, pred_intervals, pred_lab))
 
+        self.eval_data.confusion_matrix = conf_m.tolist()
+        self.eval_data.conf_labels = labels
+
         # Aggregations
-        results = self.process_results(evals, times)
+        self.process_results(evals, times)
 
         # Outputs
-        self.save_results(results, 'crf_test_mir_eval.json')
-        self.print_results(results)
+        self.save_results('crf_evaluation.json')
+        self.print_results()
