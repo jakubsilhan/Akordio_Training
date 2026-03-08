@@ -9,6 +9,7 @@ data:
       enabled: True # whether to use pcp or log CQT
       bins: 12 # frequency resolution of CQT (bin for each semitone)
       octaves: 6 # number of octaves (separately specified for chroma)
+    test_split: 0.2
     num_splits: 5 # number of k-fold folds
     bins_per_octave: 24 # frequency resolution of CQT
     cqt_bins: 144 # number of total bins that specifies number of octaves (144/24=6) or (216/36=6)
@@ -21,21 +22,22 @@ data:
 train: # used for both training a evaluating
   data_source: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/PCPDataset"
   model_path: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Models"
-  model_name: "pcp_log_majmin"
-  val_fold: 3 # which fold to use as test set
-  model_type: "CR1" # CR1/SimpleLSTM/BTC...
-  model_complexity: "majmin" # which type of chords to train (majmin/majmin7/complex)
-  checkpoint_interval: 10
+  model_name: "log_pcp_complex"
+  val_fold: 0 # which fold to use as validation set
+  model_type: "LOG" # CR1/CR2/BTC/CNN/LOG...
+  model_complexity: "complex" # which type of chords to train (majmin/majmin7/complex)
+  checkpoint_interval: 10 # after how many epochs to checkpoint
   model:
     batch_size: 128
     input: 144 # feature size 144/216
-    output: 25 # output size (number of chords 25/61/170)
-    hidden: [256] # hidden size (depends on a model) 128/256
-    dropout: [0.4, 0, 0] # dropout (depends on a model)
+    output: 170 # output size (number of chords 25/61/170)
+    hidden: [0] # hidden size (depends on a model) 128/256
+    dropout: [0, 0, 0] # dropout (depends on a model)
     layers: 1 # number of layers
     bidirectional: True
     padding_index: -1
     epoch_count: 100
     loss_patience: 10
-    learning_rate: 1e-4
+    learning_rate: 1e-3
+    loss_delta: 1e-3
     weight_decay: 1e-5

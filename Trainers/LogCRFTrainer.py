@@ -34,7 +34,7 @@ class LogCRFTrainer(BaseTrainer):
         self.model = CRF(num_labels=self.config.train.model.output).to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.train.model.learning_rate)
         self.train_mean, self.train_std = 0.0, 1.0
-        self.state, self.train_mean, self.train_std = self.load_checkpoint_if_exists(self.model, self.optimizer, self.train_mean, self.train_std, "crf_")
+        self.state, self.train_mean, self.train_std = self.load_checkpoint_if_exists(self.model, self.optimizer, self.train_mean, self.train_std)
     
     def train_epoch(self) -> Tuple[float, float]:
         """Train for one epoch and return average loss and accuracy"""
@@ -47,6 +47,8 @@ class LogCRFTrainer(BaseTrainer):
             X_batch = X_batch.detach().cpu().numpy().astype(np.float32)
             y_batch = y_batch.to(self.device)
             mask = (y_batch != self.config.train.model.padding_index).to(self.device)
+            y_safe = y_batch.clone()
+            y_safe[~mask] = 0
             
             # Normalization with scaler
             batch_size, seq_len, feat_dim = X_batch.shape
@@ -57,7 +59,9 @@ class LogCRFTrainer(BaseTrainer):
             # Get logits from logistic regression
             X_flat = X_batch.reshape(-1, feat_dim)
             probs = self.pre_model.predict_proba(X_flat)
-            logits = torch.from_numpy(probs).float()
+            full_probs = np.zeros((probs.shape[0], self.config.train.model.output), dtype=np.float32)
+            full_probs[:, self.pre_model.classes_] = probs
+            logits = torch.from_numpy(full_probs).float()
             logits = torch.log(logits + 1e-8).view(batch_size, seq_len, -1).to(self.device)
             
             # Get predictions
@@ -69,7 +73,7 @@ class LogCRFTrainer(BaseTrainer):
                                        padding_value=self.config.train.model.padding_index)
             
             # Loss and accuracy
-            log_likelihood = self.model(logits, y_batch, mask)
+            log_likelihood = self.model(logits, y_safe, mask)
             loss = -log_likelihood.mean()
 
             acc = accuracy_fn(y_batch, preds_padded, self.config.train.model.padding_index)
@@ -94,11 +98,13 @@ class LogCRFTrainer(BaseTrainer):
         accuracies = []
         
         with torch.inference_mode():
-            for X_batch, y_batch in self.train_loader:
+            for X_batch, y_batch in self.val_loader:
                 # Convert to numpy for sklearn
                 X_batch = X_batch.detach().cpu().numpy().astype(np.float32)
                 y_batch = y_batch.to(self.device)
                 mask = (y_batch != self.config.train.model.padding_index).to(self.device)
+                y_safe = y_batch.clone()
+                y_safe[~mask] = 0
                 
                 # Normalization with scaler
                 batch_size, seq_len, feat_dim = X_batch.shape
@@ -109,11 +115,13 @@ class LogCRFTrainer(BaseTrainer):
                 # Get logits from logistic regression
                 X_flat = X_batch.reshape(-1, feat_dim)
                 probs = self.pre_model.predict_proba(X_flat)
-                logits = torch.from_numpy(probs).float()
+                full_probs = np.zeros((probs.shape[0], self.config.train.model.output), dtype=np.float32)
+                full_probs[:, self.pre_model.classes_] = probs
+                logits = torch.from_numpy(full_probs).float()
                 logits = torch.log(logits + 1e-8).view(batch_size, seq_len, -1).to(self.device)
                 
                 # Loss
-                log_likelihood = self.model(logits, y_batch, mask)
+                log_likelihood = self.model(logits, y_safe, mask)
                 loss = -log_likelihood.mean()
                 
                 # Get predictions

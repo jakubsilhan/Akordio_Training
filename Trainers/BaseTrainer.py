@@ -90,9 +90,9 @@ class BaseTrainer:
         model = model_class(config=self.config, device=self.device).to(self.device)
         return model
 
-    def load_checkpoint_if_exists(self, model: nn.Module, optimizer: optim.Optimizer, train_mean: float, train_std: float, prefix = "") -> Tuple[TrainingState, float, float]:
+    def load_checkpoint_if_exists(self, model: nn.Module, optimizer: optim.Optimizer, train_mean: float, train_std: float) -> Tuple[TrainingState, float, float]:
             """Load checkpoint if it exists, otherwise return fresh training state"""
-            best_model_path = os.path.join(self.model_folder, f"{prefix}best_model.pt")
+            best_model_path = os.path.join(self.model_folder, f"{self.prefix}best_model.pt")
             # Initialize fresh training state if no checkpoint
             if not os.path.exists(best_model_path):
                 print("Failed to find best saved model!")
@@ -148,7 +148,7 @@ class BaseTrainer:
             )
             
             # Rename checkpoint
-            checkpoint_name = f"checkpoint_epoch_{start_epoch-1}.pt"
+            checkpoint_name = f"{self.prefix}checkpoint_epoch_{start_epoch-1}.pt"
             checkpoint_path = os.path.join(self.model_folder, checkpoint_name)
             shutil.move(best_model_path, checkpoint_path)
             
@@ -451,6 +451,6 @@ class BaseTrainer:
         plt.title("Accuracy Curve")
         plt.legend()
         
-        figure_path = os.path.join(self.model_folder, "learning_curve.png")
+        figure_path = os.path.join(self.model_folder, f"{self.prefix}learning_curve.png")
         plt.savefig(figure_path)
         plt.show()

@@ -58,6 +58,8 @@ class LogCRFTester(BaseTester):
                 X_batch = X_scaled.reshape(batch_size, seq_len, feat_dim)
                 targs = y_batch
                 mask = (targs != self.config.train.model.padding_index).to(self.device)
+                y_safe = y_batch.clone()
+                y_safe[~mask] = 0
 
                 # Forward pass
                 batch_size, seq_len, feat_dim = X_batch.shape
@@ -67,6 +69,9 @@ class LogCRFTester(BaseTester):
                 start_t = time.perf_counter()
 
                 probs = pre_model.predict_proba(X_flat)
+                full_probs = np.zeros((probs.shape[0], self.config.train.model.output), dtype=np.float32)
+                full_probs[:, pre_model.classes_] = probs
+                logits = torch.from_numpy(full_probs).float()
                 logits = torch.from_numpy(probs).float()
                 logits = torch.log(logits + 1e-8).view(batch_size, seq_len, -1).to(self.device)
                 preds = crf.viterbi_decode(logits, mask) # type: ignore
@@ -76,7 +81,7 @@ class LogCRFTester(BaseTester):
                 times.append(end_t-start_t)
 
                 # Conf matrix aggregation
-                y_true = y_batch.view(-1).cpu().numpy()
+                y_true = y_safe.view(-1).cpu().numpy()
                 y_pred = preds
                 conf_m += confusion_matrix(y_true, y_pred, labels=range(num_classes))
 

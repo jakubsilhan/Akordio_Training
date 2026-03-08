@@ -5,6 +5,7 @@ from pathlib import Path
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from Services.DatasetLoaderService import DatasetLoaderService
+from Akordio_Core.Classes.NetConfig import Config
 
 def accuracy_fn(y_real, y_pred):
     mask = y_real != 0
@@ -13,7 +14,7 @@ def accuracy_fn(y_real, y_pred):
 
 class LogisticTrainer:
     """Trainer for Logistic Regression models using sklearn"""
-    def __init__(self, config):
+    def __init__(self, config: Config):
         self.config = config
         self.loader = DatasetLoaderService(config)
         self.model_folder = os.path.join(
@@ -45,19 +46,23 @@ class LogisticTrainer:
         train_X = scaler.fit_transform(train_X)
         valid_X = scaler.transform(valid_X)
 
+        print("Data prepared")
         # Model
         clf = LogisticRegression(
             solver="lbfgs",
-            max_iter=1000,
-            # class_weight="balanced",
-            random_state=self.config.base.random_seed
+            max_iter=self.config.train.model.epoch_count,
+            random_state=self.config.base.random_seed,
+            verbose=1
         )
-
+        print("Model initialized")
         start_time = time.time()
+
         # Training
         clf.fit(train_X, train_y)
+
         # Validation
         preds = clf.predict(valid_X)
+
         total_time = time.time() - start_time
 
         # Accuracy
@@ -90,7 +95,8 @@ class LogisticTrainer:
         clf = LogisticRegression(
             solver="lbfgs",
             max_iter=epoch_count,
-            random_state=self.config.base.random_seed
+            random_state=self.config.base.random_seed,
+            verbose=1
         )
 
         start_time = time.time()

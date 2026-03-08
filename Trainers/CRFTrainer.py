@@ -42,7 +42,7 @@ class CRFTrainer(BaseTrainer):
         # Model
         self.model = CRF(num_labels=self.config.train.model.output).to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.train.model.learning_rate)
-        self.state, self.train_mean, self.train_std = self.load_checkpoint_if_exists(self.model, self.optimizer, self.train_mean, self.train_std, self.prefix)
+        self.state, self.train_mean, self.train_std = self.load_checkpoint_if_exists(self.model, self.optimizer, self.train_mean, self.train_std)
 
     def train_epoch(self) -> Tuple[float, float]:
         """Train for one epoch and return average loss and accuracy"""
