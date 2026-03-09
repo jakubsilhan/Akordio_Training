@@ -55,7 +55,6 @@ class Model(nn.Module):
         self.conv_linear = nn.Conv2d(128, self.output_features, kernel_size=(1, 1), padding=0)
 
         # Output
-        self.fc = nn.Linear(self.latent_dim, self.output_features)
         self.fc_root = nn.Linear(self.latent_dim, 13)
         self.fc_quality = nn.Linear(self.latent_dim, 15)
 
@@ -138,13 +137,17 @@ class Model(nn.Module):
         out = self.dropout_layer(out)
         out = self.conv_block_3(out)
         out = self.dropout_layer(out)
+        avg_features = nn.AvgPool2d(kernel_size=(out.size(2), out.size(3)))
+        features = avg_features(out).squeeze(-1).squeeze(-1) # [batch*timestep, 128]
+
+
+        # Main head
+        out = self.conv_linear(out)
         avg = nn.AvgPool2d(kernel_size=(out.size(2), out.size(3)))
         out = avg(out)
+        logits = out.squeeze(-1).squeeze(-1)
 
-        features = out.view(out.size(0), -1)  # [batch*timestep, num_chords]
-
-        # Heads
-        logits = self.fc(features)
+        # Additional heads
         logits_root = self.fc_root(features)
         logits_quality = self.fc_quality(features)
 

@@ -69,7 +69,7 @@ class CRFTester(BaseTester):
 
                 # Conf matrix aggregation
                 y_true = y_batch.view(-1).cpu().numpy()
-                y_pred = preds
+                y_pred = np.array([label for seq in preds for label in seq])
                 conf_m += confusion_matrix(y_true, y_pred, labels=range(num_classes))
 
                 # Per fragment

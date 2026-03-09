@@ -6,6 +6,7 @@ from Akordio_Core.Classes.NetConfig import load_config
 from Testers.BaseTester import BaseTester
 from Testers.CRFTester import CRFTester
 from Testers.LogCRFTester import LogCRFTester
+from Testers.LogTester import LogTester
 
 
 if __name__ == "__main__":
@@ -41,7 +42,7 @@ if __name__ == "__main__":
         if not log_enabled:
             tester = BaseTester(config)
         else:
-            raise NotImplementedError()
+            tester = LogTester(config)
     else:                       # CRF
         if not log_enabled:
             tester = CRFTester(config)

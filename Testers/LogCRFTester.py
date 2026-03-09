@@ -72,7 +72,6 @@ class LogCRFTester(BaseTester):
                 full_probs = np.zeros((probs.shape[0], self.config.train.model.output), dtype=np.float32)
                 full_probs[:, pre_model.classes_] = probs
                 logits = torch.from_numpy(full_probs).float()
-                logits = torch.from_numpy(probs).float()
                 logits = torch.log(logits + 1e-8).view(batch_size, seq_len, -1).to(self.device)
                 preds = crf.viterbi_decode(logits, mask) # type: ignore
 
@@ -82,11 +81,11 @@ class LogCRFTester(BaseTester):
 
                 # Conf matrix aggregation
                 y_true = y_safe.view(-1).cpu().numpy()
-                y_pred = preds
+                y_pred = np.array([label for seq in preds for label in seq])
                 conf_m += confusion_matrix(y_true, y_pred, labels=range(num_classes))
 
                 # Per fragment
-                for i in range(X_batch.size(0)):
+                for i in range(batch_size):
 
                     # Conversions
                     preds_sq = preds[i]
