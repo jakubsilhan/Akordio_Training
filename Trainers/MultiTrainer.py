@@ -16,18 +16,6 @@ class MultiTrainer(BaseTrainer):
     """
     Training class for basic PyTorch chord recognition models utilizing multitask training
     """
-    def __init__(self, config: Config):
-        super().__init__(config)
-        model_name = self.config.train.model_name
-        if not model_name.endswith("_multi"):
-            model_name += "_multi"
-        self.model_folder = os.path.join(
-            Path(__file__).resolve().parent.parent,
-            "Models",
-            self.config.train.model_name+"_multi", 
-            str(self.config.train.val_fold)
-        )
-
 
     def setup(self):
         torch.manual_seed(self.config.base.random_seed)

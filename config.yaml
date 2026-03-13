@@ -3,10 +3,10 @@ base:
 data:
   dataset_dir: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Datasets"
   datasets: [Beatles, Uspop2000, CaroleKing, Queen, RobbieWilliams]
-  preprocessed_dir: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/PCPDataset"
+  preprocessed_dir: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/BaseDataset"
   preprocess:
     pcp:
-      enabled: True # whether to use pcp or log CQT
+      enabled: False # whether to use pcp or log CQT
       bins: 12 # frequency resolution of CQT (bin for each semitone)
       octaves: 6 # number of octaves (separately specified for chroma)
     test_split: 0.2
@@ -20,19 +20,19 @@ data:
     pitch_shift_end: 5 # highest pitch shift
     sampling_rate: 22050 # sampling rate
 train: # used for both training a evaluating
-  data_source: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/PCPDataset"
+  data_source: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/BaseDataset"
   model_path: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Models"
-  model_name: "log_pcp_complex"
-  val_fold: 4 # which fold to use as validation set
-  model_type: "LOG" # CR1/CR2/BTC/CNN/LOG...
+  model_name: "cnn_144_complex_multi"
+  val_fold: 0 # which fold to use as validation set
+  model_type: "CNN" # CR1/CR2/BTC/CNN/LOG...
   model_complexity: "complex" # which type of chords to train (majmin/majmin7/complex)
   checkpoint_interval: 10 # after how many epochs to checkpoint
   model:
-    batch_size: 128
+    batch_size: 2
     input: 144 # feature size 144/216
     output: 170 # output size (number of chords 25/61/170)
-    hidden: [0] # hidden size (depends on a model) 128/256
-    dropout: [0, 0, 0] # dropout (depends on a model)
+    hidden: [256] # hidden size (depends on a model) 128/256
+    dropout: [0.5] # dropout (depends on a model)
     layers: 1 # number of layers
     bidirectional: True
     padding_index: -1
