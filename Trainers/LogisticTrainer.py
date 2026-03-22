@@ -32,6 +32,8 @@ class LogisticTrainer:
 
         # Load data
         train_tensors, valid_tensors = self.loader.load_data()
+        if valid_tensors is None:
+            return
 
         train_x_list, train_y_list = zip(*train_tensors)
         train_X = np.concatenate(train_x_list, axis=0)

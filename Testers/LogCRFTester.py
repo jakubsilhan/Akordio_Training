@@ -18,6 +18,11 @@ class LogCRFTester(BaseTester):
         """Main testing loop"""
         # Load data
         if test:
+            self.config.train.val_fold = -1
+            self.model_folder = os.path.join(
+                os.path.dirname(self.model_folder),
+                "final"
+            )
             test_tensors = self.loader.load_test_data()
         else:
             test_tensors = self.loader.load_valid_data()

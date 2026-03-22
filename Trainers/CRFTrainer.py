@@ -17,13 +17,13 @@ class CRFTrainer(BaseTrainer):
     """
 
     # Trainer specific setup
-    def setup(self):
+    def setup(self, final: bool=False):
         torch.manual_seed(self.config.base.random_seed)
         # Pathing
         self.prefix = "crf_"
 
         # Data
-        train_tensors, valid_tensors = self.loader.load_data()
+        train_tensors, valid_tensors = self.loader.load_data(final=final)
         self.train_loader, self.val_loader = self.create_dataloaders(train_tensors, valid_tensors)
 
         # Pre-model

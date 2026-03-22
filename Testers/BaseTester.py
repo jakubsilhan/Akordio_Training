@@ -31,6 +31,7 @@ class EvalData:
     conf_labels: List = field(default_factory=list)
 
 class BaseTester:
+    # TODO rework to work more with the DRY principle and clean it up
     """
     Tester class for basic PyTorch chord recognition models
     """
@@ -88,9 +89,12 @@ class BaseTester:
         model = model_class(config=self.config, device=self.device).to(self.device)
         return model
     
-    def load_model_weights(self, model: nn.Module, prefix: str = "") -> Tuple[float, float]:
+    def load_model_weights(self, model: nn.Module, prefix: str = "", test: bool = False) -> Tuple[float, float]:
         """Loads model weights and data normalization values"""
-        model_path = os.path.join(self.model_folder, f"{prefix}best_model.pt")
+        if test:
+            model_path = os.path.join(self.model_folder, f"{prefix}final_model.pt")
+        else:
+            model_path = os.path.join(self.model_folder, f"{prefix}best_model.pt")
         loaded = torch.load(model_path, map_location=self.device)
         model.load_state_dict(loaded["model"], strict=False)
         
@@ -106,6 +110,11 @@ class BaseTester:
 
         # Load data
         if test:
+            self.config.train.val_fold = -1
+            self.model_folder = os.path.join(
+                os.path.dirname(self.model_folder),
+                "final"
+            )
             test_tensors = self.loader.load_test_data()
         else:
             test_tensors = self.loader.load_valid_data()
@@ -115,7 +124,7 @@ class BaseTester:
         model = self.create_model()
 
         # Load model and normalization
-        norm_mean, norm_std = self.load_model_weights(model)
+        norm_mean, norm_std = self.load_model_weights(model, test=test)
 
         # Initializations
         evals = []

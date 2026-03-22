@@ -29,7 +29,8 @@ def generate_total_table(*trios: tuple[str, str, bool], filename: str):
             aggregated = load_aggregated(normal)
 
         # Prepare data 
-        data.append((name ,np.mean(aggregated.root), np.mean(aggregated.majmin), np.mean(aggregated.thirds), np.mean(aggregated.triads), np.mean(aggregated.sevenths), np.mean(aggregated.tetrads)))
+        fields = [aggregated.root, aggregated.majmin, aggregated.thirds, aggregated.triads, aggregated.sevenths, aggregated.tetrads]
+        data.append((name, *[round(np.mean(f)*100, 2) for f in fields]))
 
     #  Save table
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -72,6 +73,7 @@ def generate_times_table(*trios: tuple[str, str, bool], filename: str):
     print(f"Saved to {out_path}")
 
 if __name__ == "__main__":
-    generate_total_table(("log_pcp_complex", "Logistická regrese", True), ("cnn_144_complex", "CNN", True), ("cr2_144_complex", "CR2", False), ("btc_144_complex", "BTC", False), filename="avg_accuracies")
-    # generate_total_table(("cnn_144_complex_multi", "CNN", True), ("cr2_144_complex_multi", "CR2", False), ("btc_144_complex_multi", "BTC", False), filename="multitask_accuracies")
-    # generate_times_table(("log_pcp_complex", "Logistická regrese", True), ("cnn_144_complex", "CNN", True), ("cr2_144_complex", "CR2", False), ("btc_144_complex", "BTC", False), filename="avg_infer_times")
+    # generate_total_table(("log_pcp_complex", "Logistická regrese", True), ("cnn_144_complex", "CNN", True), ("cr2_144_complex", "CRNN (CR2)", False), ("btc_144_complex", "BTC", False), filename="avg_accuracies")
+    # generate_total_table(("cnn_144_complex_multi", "CNN", True), ("cr2_144_complex_multi", "CRNN (CR2)", False), ("btc_144_complex_multi", "BTC", False), filename="multitask_accuracies")
+    generate_total_table(("cr2_144_majmin_multi_final", "Majmin", False), ("cr2_144_majmin7_multi_final", "Majmin7", False), ("cr2_144_complex_multi_final", "Complex", False), filename="final_accuracies")
+    # generate_times_table(("log_pcp_complex", "Logistická regrese", True), ("cnn_144_complex", "CNN", True), ("cr2_144_complex", "CRNN (CR2)", False), ("btc_144_complex", "BTC", False), filename="avg_infer_times")

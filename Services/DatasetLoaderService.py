@@ -1,7 +1,7 @@
 import os, torch
 import numpy as np
 from tqdm import tqdm
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 from Akordio_Core.Classes.NetConfig import Config
 from Akordio_Core.Tools.Chords import Chords, Complexity
@@ -14,6 +14,7 @@ class DatasetLoaderService:
         self.config = config
         self.chord_tool = Chords()
         self.complexity = self._get_complexity()
+        self.multitask = False
 
     def _get_complexity(self) -> Complexity:
         """Get chord complexity from config"""
@@ -25,10 +26,12 @@ class DatasetLoaderService:
             case _:
                 return Complexity.MAJMIN
 
-    def load_data(self, multitask: bool = False) -> Tuple[List[Tuple[torch.Tensor, torch.Tensor]], List[Tuple[torch.Tensor, torch.Tensor]]]:
+    def load_data(self, final: bool = False, multitask: bool = False) -> Tuple[List[Tuple[torch.Tensor, torch.Tensor]], Optional[List[Tuple[torch.Tensor, torch.Tensor]]]]:
         """Load train and valid data tensors"""
         self.multitask = multitask
         train_tensors = self._load_train_data()
+        if final:
+            return train_tensors, None
         valid_tensors = self.load_valid_data(multitask)
         return train_tensors, valid_tensors
     
@@ -38,7 +41,7 @@ class DatasetLoaderService:
         # TODO add the check for missing dataset and folds here
         data_path = os.path.join(self.config.train.data_source, "train")
         for fold in tqdm(os.listdir(data_path), desc="Loading train folds"):
-            if fold == "config.yaml" or fold == str(self.config.train.val_fold): # Skip dataset config and test and val fold
+            if fold == "config.yaml" or fold == str(self.config.train.val_fold): # Skip dataset config and val fold
                 continue
             
             fold_dir = os.path.join(data_path, fold)

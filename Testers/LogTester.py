@@ -16,10 +16,10 @@ class LogTester(BaseTester):
     def test(self, test: bool = False) -> None:
         """Main testing loop"""
         # Load data
-        if test:
-            test_tensors = self.loader.load_test_data()
-        else:
-            test_tensors = self.loader.load_valid_data()
+        # if test:
+        #     test_tensors = self.loader.load_test_data()
+        # else:
+        test_tensors = self.loader.load_valid_data()
         test_dataloader = self.create_dataloader(test_tensors)
 
         # Load pre-model

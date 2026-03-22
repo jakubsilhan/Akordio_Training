@@ -17,13 +17,13 @@ class MultiTrainer(BaseTrainer):
     Training class for basic PyTorch chord recognition models utilizing multitask training
     """
 
-    def setup(self):
+    def setup(self, final: bool=False):
         torch.manual_seed(self.config.base.random_seed)
         # Pathing
         self.prefix = ""
 
         # Data
-        train_tensors, valid_tensors = self.loader.load_data(multitask=True)
+        train_tensors, valid_tensors = self.loader.load_data(final=final, multitask=True)
         self.train_loader, self.val_loader = self.create_dataloaders(train_tensors, valid_tensors)
         self.train_mean, self.train_std = compute_mean_std(self.train_loader)
 

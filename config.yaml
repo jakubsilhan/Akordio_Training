@@ -22,15 +22,15 @@ data:
 train: # used for both training a evaluating
   data_source: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/BaseDataset"
   model_path: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Models"
-  model_name: "cnn_144_complex_multi"
-  val_fold: 1 # which fold to use as validation set
-  model_type: "CNN" # CR1/CR2/BTC/CNN/LOG...
-  model_complexity: "complex" # which type of chords to train (majmin/majmin7/complex)
+  model_name: "cr2_144_majmin_multi_final"
+  val_fold: -1 # which fold to use as validation set
+  model_type: "CR2" # CR1/CR2/BTC/CNN/LOG...
+  model_complexity: "majmin" # which type of chords to train (majmin/majmin7/complex)
   checkpoint_interval: 10 # after how many epochs to checkpoint
   model:
-    batch_size: 2
+    batch_size: 128
     input: 144 # feature size 144/216
-    output: 170 # output size (number of chords 25/61/170)
+    output: 25 # output size (number of chords 25/61/170)
     hidden: [256] # hidden size (depends on a model) 128/256
     dropout: [0.5] # dropout (depends on a model)
     layers: 1 # number of layers

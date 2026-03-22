@@ -155,7 +155,7 @@ class BaseTrainer:
             return state, train_mean, train_std  
 
     # Trainer specific setup
-    def setup(self):
+    def setup(self, final: bool=False):
         """ Base Setup method  
         Must contain definitions for these self.params:
             - self.prefix
@@ -170,7 +170,7 @@ class BaseTrainer:
         self.prefix = ""
 
         # Data
-        train_tensors, valid_tensors = self.loader.load_data()
+        train_tensors, valid_tensors = self.loader.load_data(final=final)
         self.train_loader, self.val_loader = self.create_dataloaders(train_tensors, valid_tensors)
         self.train_mean, self.train_std = compute_mean_std(self.train_loader)
 
@@ -264,8 +264,13 @@ class BaseTrainer:
     def train_final(self, epoch_count: int):
         """Main training loop without validation"""
         # Setup
-        self.setup()
+        self.config.train.val_fold = -1
+        self.model_folder = os.path.join(
+            os.path.dirname(self.model_folder),
+            "final"
+        )
         os.makedirs(self.model_folder, exist_ok=True)
+        self.setup(final=True)
         shutil.copy2("config.yaml", self.model_folder)
         torch.manual_seed(self.config.base.random_seed)
                 

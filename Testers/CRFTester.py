@@ -1,4 +1,4 @@
-import time, mir_eval, torch
+import time, mir_eval, torch, os
 import numpy as np
 from sklearn.metrics import confusion_matrix
 
@@ -18,6 +18,11 @@ class CRFTester(BaseTester):
 
         # Load data
         if test:
+            self.config.train.val_fold = -1
+            self.model_folder = os.path.join(
+                os.path.dirname(self.model_folder),
+                "final"
+            )
             test_tensors = self.loader.load_test_data()
         else:
             test_tensors = self.loader.load_valid_data()
@@ -27,13 +32,13 @@ class CRFTester(BaseTester):
         pre_model = self.create_model()
 
         # Load pre_model and normalization
-        norm_mean, norm_std = self.load_model_weights(pre_model)
+        norm_mean, norm_std = self.load_model_weights(pre_model, test=test)
 
         # Create CRF
         crf = CRF(num_labels=self.config.train.model.output).to(self.device)
 
         # Load CRF
-        norm_mean, norm_std = self.load_model_weights(crf, "crf_")
+        norm_mean, norm_std = self.load_model_weights(crf, "crf_", test=test)
 
         # Initializations
         evals = []
