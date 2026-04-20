@@ -184,7 +184,6 @@ data:
     sampling_rate: 22050 # sampling rate
 train: # used for both training a evaluating
   data_source: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Data/BaseDataset"
-  model_path: "D:/Development/Source/University/Diploma/Akordio/Akordio-Training/Models"
   model_name: "cr2_144_majmin_multi_final"
   val_fold: -1 # which fold to use as validation set
   model_type: "CR2" # CR1/CR2/BTC/CNN/LOG...
