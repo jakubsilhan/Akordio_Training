@@ -58,34 +58,34 @@ class Model(nn.Module):
         self.fc_root = nn.Linear(self.latent_dim, 13)
         self.fc_quality = nn.Linear(self.latent_dim, 15)
 
-    def forward(self, x):
+    def _shared_forward(self, x):
+        """Shared feature extraction for both forward methods"""
         # [batch_size, timestep, feature_size]
         batch_size, timestep, feature_size = x.shape
         context = 7
         window_size = 2 * context + 1
-
+        
         # Pad along time dimension
         x = x.permute(0, 2, 1)  # [batch, feature, time]
         pad = nn.ConstantPad1d(context, 0)
         x = pad(x)
-
+        
         # Extract context window
         result_tensors = []
         for i in range(batch_size):
             for j in range(self.timestep):
-                tmp = x[i, :, j : j + window_size].unsqueeze(0) # Window slice
+                tmp = x[i, :, j : j + window_size].unsqueeze(0)  # Window slice
                 
-                if tmp.size(-1) < window_size: # Pad if short
+                if tmp.size(-1) < window_size:  # Pad if short
                     padding_needed = window_size - tmp.size(-1)
                     tmp = nn.functional.pad(tmp, (0, padding_needed), "constant", 0)
                     
                 result_tensors.append(tmp)
-
+        
         # Concatenate windowed data
         x = torch.cat(result_tensors, dim=0)
+        x = x.unsqueeze(1)  # [batchsize * timestep, feature_size, context]
         
-        x = x.unsqueeze(1) # [batchsize * timestep, feature_size, context]
-
         # Convolutions
         out = self.conv_block_1(x)
         out = self.dropout_layer(out)
@@ -93,66 +93,41 @@ class Model(nn.Module):
         out = self.dropout_layer(out)
         out = self.conv_block_3(out)
         out = self.dropout_layer(out)
+        
+        return out, batch_size, timestep
+
+    def forward(self, x):
+        out, batch_size, timestep = self._shared_forward(x)
+        
         out = self.conv_linear(out)
         avg = nn.AvgPool2d(kernel_size=(out.size(2), out.size(3)))
         out = avg(out)
-
+        
         # Reshape
         out = out.squeeze(-1).squeeze(-1)  # [batch*timestep, num_chords]
-        out = out.view(batch_size, timestep, -1) # [batch, timestep, num_chords]
+        out = out.view(batch_size, timestep, -1)  # [batch, timestep, num_chords]
         return out
-    
+
     def forward_multitask(self, x):
-        # [batch_size, timestep, feature_size]
-        batch_size, timestep, feature_size = x.shape
-        context = 7
-        window_size = 2 * context + 1
-
-        # Pad along time dimension
-        x = x.permute(0, 2, 1)  # [batch, feature, time]
-        pad = nn.ConstantPad1d(context, 0)
-        x = pad(x)
-
-        # Extract context window
-        result_tensors = []
-        for i in range(batch_size):
-            for j in range(self.timestep):
-                tmp = x[i, :, j : j + window_size].unsqueeze(0) # Window slice
-                
-                if tmp.size(-1) < window_size: # Pad if short
-                    padding_needed = window_size - tmp.size(-1)
-                    tmp = nn.functional.pad(tmp, (0, padding_needed), "constant", 0)
-                    
-                result_tensors.append(tmp)
-
-        # Concatenate windowed data
-        x = torch.cat(result_tensors, dim=0)
+        out, batch_size, timestep = self._shared_forward(x)
         
-        x = x.unsqueeze(1) # [batchsize * timestep, feature_size, context]
-
-        # Convolutions
-        out = self.conv_block_1(x)
-        out = self.dropout_layer(out)
-        out = self.conv_block_2(out)
-        out = self.dropout_layer(out)
-        out = self.conv_block_3(out)
-        out = self.dropout_layer(out)
+        # Extract features for additional heads
         avg_features = nn.AvgPool2d(kernel_size=(out.size(2), out.size(3)))
-        features = avg_features(out).squeeze(-1).squeeze(-1) # [batch*timestep, 128]
-
-
+        features = avg_features(out).squeeze(-1).squeeze(-1)  # [batch*timestep, 128]
+        
         # Main head
         out = self.conv_linear(out)
         avg = nn.AvgPool2d(kernel_size=(out.size(2), out.size(3)))
         out = avg(out)
         logits = out.squeeze(-1).squeeze(-1)
-
+        
         # Additional heads
         logits_root = self.fc_root(features)
         logits_quality = self.fc_quality(features)
-
+        
         # Final reshape [batch, timestep, num_chords]
         logits = logits.view(batch_size, timestep, -1)
         logits_root = logits_root.view(batch_size, timestep, -1)
         logits_quality = logits_quality.view(batch_size, timestep, -1)
+        
         return logits, logits_root, logits_quality

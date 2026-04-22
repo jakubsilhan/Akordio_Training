@@ -36,33 +36,27 @@ class Model(nn.Module):
         self.fc_root = nn.Linear(self.hidden_size * self.num_directions, 13)
         self.fc_quality = nn.Linear(self.hidden_size * self.num_directions, 15)
 
-    def forward(self, x):
-        # [batch_size, timestep,feature_size]
-        x = x.unsqueeze(1) # [batch_size, num_channels=1, timestep, feature_size]
+    def _shared_forward(self, x):
+        """Shared feature extraction for both forward methods"""
+        # [batch_size, timestep, feature_size]
+        x = x.unsqueeze(1)  # [batch_size, num_channels=1, timestep, feature_size]
         x = self.batch_norm(x)
-
         conv = self.relu(self.conv1(x))
-        conv = self.relu(self.conv2(conv)) # [batch, out_feature_maps=out_channels, in_feature]
-        conv = conv.squeeze(3).permute(0,2,1) # [batch, timestep, feature]
-
+        conv = self.relu(self.conv2(conv))  # [batch, out_feature_maps=out_channels, in_feature]
+        conv = conv.squeeze(3).permute(0, 2, 1)  # [batch, timestep, feature]
+        
         h0 = torch.zeros(self.num_layers * self.num_directions, conv.size(0), self.hidden_size).to(self.device)
         gru, h = self.gru(conv, h0)
         gru, _ = self.decoder_gru(gru)
+        return gru
+
+    def forward(self, x):
+        gru = self._shared_forward(x)
         logits = self.fc(gru)
         return logits
-    
+
     def forward_multitask(self, x):
-        # [batch_size, timestep,feature_size]
-        x = x.unsqueeze(1) # [batch_size, num_channels=1, timestep, feature_size]
-        x = self.batch_norm(x)
-
-        conv = self.relu(self.conv1(x))
-        conv = self.relu(self.conv2(conv)) # [batch, out_feature_maps=out_channels, in_feature]
-        conv = conv.squeeze(3).permute(0,2,1) # [batch, timestep, feature]
-
-        h0 = torch.zeros(self.num_layers * self.num_directions, conv.size(0), self.hidden_size).to(self.device)
-        gru, h = self.gru(conv, h0)
-        gru, _ = self.decoder_gru(gru)
+        gru = self._shared_forward(x)
         logits = self.fc(gru)
         root_logits = self.fc_root(gru)
         quality_logits = self.fc_quality(gru)
