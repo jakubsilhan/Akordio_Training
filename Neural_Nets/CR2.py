@@ -15,23 +15,22 @@ class Model(nn.Module):
         self.num_directions = 2 if self.bidirectional else 1
         self.dropout = config.train.model.dropout
         self.device = device
-        
-        # Activation
-        self.relu = nn.ReLU(inplace=True)
-        
-        # Batchnorm and dropout
+                
+        # Batchnorm
         self.batch_norm = nn.BatchNorm2d(1)
 
-        # Convolutional layer
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(5,5), padding=2)  # preserve sequence length
-        self.conv2 = nn.Conv2d(1, 36, kernel_size=(1, self.feature_size))
+        # Activation
+        self.relu = nn.ReLU(inplace=True)
+
+        # Convolutional layers
+        self.conv1 = nn.Conv2d(1, 1, (5,5), padding=2)
+        self.conv2 = nn.Conv2d(1, 36, (1, self.feature_size))
 
         # Recurrent layers
         self.gru = nn.GRU(input_size=36, hidden_size=self.hidden_size, num_layers=self.num_layers, batch_first=True, bidirectional=self.bidirectional)
-
         self.decoder_gru = nn.GRU(input_size=self.hidden_size*self.num_directions, hidden_size=self.hidden_size, num_layers=self.num_layers, batch_first=True, bidirectional=self.bidirectional)
 
-        # Output
+        # Output heads
         self.fc = nn.Linear(self.hidden_size*self.num_directions, self.output_features)
         self.fc_root = nn.Linear(self.hidden_size * self.num_directions, 13)
         self.fc_quality = nn.Linear(self.hidden_size * self.num_directions, 15)
@@ -39,16 +38,27 @@ class Model(nn.Module):
     def _shared_forward(self, x):
         """Shared feature extraction for both forward methods"""
         # [batch_size, timestep, feature_size]
+        # Preparations
         x = x.unsqueeze(1)  # [batch_size, num_channels=1, timestep, feature_size]
         x = self.batch_norm(x)
-        conv = self.relu(self.conv1(x))
-        conv = self.relu(self.conv2(conv))  # [batch, out_feature_maps=out_channels, in_feature]
-        conv = conv.squeeze(3).permute(0, 2, 1)  # [batch, timestep, feature]
+
+        # First conv
+        x = self.conv1(x)
+        x = self.relu(x)
+
+        # Second conv
+        x = self.conv2(x)  # [batch, num_channels=out_feature_maps, timestep, feature_size]
+        x = self.relu(x)
+
+        # Reshape
+        x = x.squeeze(3) # [batch, num_channels=out_feature_maps, timestep]
+        x = x.permute(0, 2, 1)  # [batch, timestep, num_channels=out_feature_maps]
         
-        h0 = torch.zeros(self.num_layers * self.num_directions, conv.size(0), self.hidden_size).to(self.device)
-        gru, h = self.gru(conv, h0)
-        gru, _ = self.decoder_gru(gru)
-        return gru
+        # Gru
+        h_init = torch.zeros(self.num_layers * self.num_directions, x.size(0), self.hidden_size).to(self.device)
+        x, _ = self.gru(x, h_init)
+        x, _ = self.decoder_gru(x)
+        return x
 
     def forward(self, x):
         gru = self._shared_forward(x)

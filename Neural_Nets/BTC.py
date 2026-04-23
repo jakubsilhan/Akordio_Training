@@ -6,7 +6,7 @@ import math
 
 from Akordio_Core.Classes.NetConfig import Config
 
-"""Based on https://arxiv.org/pdf/1907.02698"""
+"""Adapted from https://github.com/jayg996/BTC-ISMIR19"""
 
 class Model(nn.Module):
     def __init__(self, config: Config, device):
