@@ -2,7 +2,7 @@ import torch
 from Akordio_Core.Classes.NetConfig import Config
 import torch.nn as nn
 
-"""Based on https://brianmcfee.net/papers/ismir2017_chord.pdf"""
+"""Based on https://brianmcfee.net/papers/ismir2017_chord.pdf, implementation partially adapted from https://github.com/jayg996/BTC-ISMIR19"""
 
 class Model(nn.Module):
     def __init__(self, config: Config, device):
